@@ -24,9 +24,11 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUser, useDoc, useMemoFirebase } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Separator } from '@/components/ui/separator';
-import { updatePassword } from 'firebase/auth';
+import { updatePassword, updateProfile } from 'firebase/auth';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const profileFormSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
@@ -48,6 +50,10 @@ export default function ProfilePage() {
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const userRef = useMemoFirebase(
     () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
@@ -82,10 +88,57 @@ export default function ProfilePage() {
     }
   }, [userProfile, profileForm]);
 
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreviewUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile || !user) return;
+
+    setIsUploading(true);
+    try {
+      const storage = getStorage();
+      const storageRef = ref(storage, `avatars/${user.uid}/${selectedFile.name}`);
+      const snapshot = await uploadBytes(storageRef, selectedFile);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+
+      await updateProfile(user, { photoURL: downloadURL });
+
+      if (userRef) {
+        await updateDoc(userRef, { photoURL: downloadURL });
+      }
+
+      toast({
+        title: 'Profile Picture Updated',
+        description: 'Your new profile picture has been saved.',
+      });
+
+      setSelectedFile(null);
+      setPreviewUrl(null);
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Upload Failed',
+        description: error.message,
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   async function onProfileSubmit(values: z.infer<typeof profileFormSchema>) {
-    if (!userRef) return;
+    if (!userRef || !user) return;
     try {
       await updateDoc(userRef, values);
+      await updateProfile(user, { displayName: `${values.firstName} ${values.lastName}` });
       toast({
         title: 'Profile Updated',
         description: 'Your profile has been successfully updated.',
@@ -117,6 +170,8 @@ export default function ProfilePage() {
     }
   }
 
+  const nameInitial = user?.displayName ? user.displayName.charAt(0) : (user?.email ? user.email.charAt(0) : '');
+
   return (
     <main className="grid flex-1 items-start gap-4 p-4 sm:px-6 sm:py-0 md:gap-8">
       <div className="space-y-6">
@@ -124,10 +179,35 @@ export default function ProfilePage() {
           <CardHeader>
             <CardTitle>Profile</CardTitle>
             <CardDescription>
-              Update your personal information.
+              Update your personal information and profile picture.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-8">
+            <div className="flex items-center gap-4">
+              <Avatar className="h-20 w-20">
+                <AvatarImage src={previewUrl || user?.photoURL || ''} alt="User avatar" />
+                <AvatarFallback>{nameInitial}</AvatarFallback>
+              </Avatar>
+              <div className="grid gap-2">
+                <Button onClick={() => fileInputRef.current?.click()} variant="outline">Change Picture</Button>
+                <Input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  className="hidden"
+                  accept="image/png, image/jpeg, image/gif"
+                />
+                 {selectedFile && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground truncate max-w-40">{selectedFile.name}</span>
+                    <Button onClick={handleUpload} disabled={isUploading} size="sm">
+                      {isUploading ? 'Uploading...' : 'Upload'}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <Form {...profileForm}>
               <form
                 onSubmit={profileForm.handleSubmit(onProfileSubmit)}
