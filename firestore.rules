@@ -97,8 +97,12 @@ service cloud.firestore {
     }
 
     match /invoices/{invoiceId} {
-      // A user can only access invoices that they own (based on the userId field in the document).
-      allow get, list, create, update, delete: if isSignedIn() && request.auth.uid == request.resource.data.userId;
+        // READ: Users can only read their own invoices. 
+        // The client query must filter by userId.
+        allow get, list: if isSignedIn() && isUserActive();
+        
+        // WRITE: Users can only create, update, or delete their own invoices.
+        allow create, update, delete: if isSignedIn() && isUserActive() && request.auth.uid == request.resource.data.userId;
     }
   }
 }
