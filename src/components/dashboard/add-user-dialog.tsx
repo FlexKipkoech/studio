@@ -33,7 +33,7 @@ import {
 import { PlusCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { initializeApp, deleteApp, getApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { getFirestore, setDoc, doc } from 'firebase/firestore';
 import { firebaseConfig } from '@/firebase/config';
 
@@ -86,10 +86,13 @@ export function AddUserDialog() {
       };
 
       await setDoc(doc(firestore, 'users', user.uid), userProfile);
+
+      // Send password reset email to the new user
+      await sendPasswordResetEmail(tempAuth, values.email);
       
       toast({
-        title: 'User Created',
-        description: `User ${values.firstName} ${values.lastName} has been successfully created.`,
+        title: 'User Created & Notified',
+        description: `User ${values.firstName} ${values.lastName} has been created and a password reset email has been sent.`,
       });
 
       form.reset();
@@ -103,8 +106,13 @@ export function AddUserDialog() {
       });
     } finally {
         // Clean up the temporary app
-        const tempApp = getApp(tempAppName);
-        await deleteApp(tempApp);
+        try {
+            const tempApp = getApp(tempAppName);
+            await deleteApp(tempApp);
+        } catch (error) {
+            // It's possible the app was not initialized if there was an early error
+            console.error("Could not clean up temporary Firebase app:", error)
+        }
         setIsSubmitting(false);
     }
   }
@@ -123,7 +131,7 @@ export function AddUserDialog() {
         <DialogHeader>
           <DialogTitle>Add New User</DialogTitle>
           <DialogDescription>
-            Enter the details below to create a new user account.
+            Enter the details below to create a new user account. They will receive an email to set their password.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -178,7 +186,7 @@ export function AddUserDialog() {
               name="password"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Password</FormLabel>
+                  <FormLabel>Initial Password</FormLabel>
                   <FormControl>
                     <Input type="password" {...field} />
                   </FormControl>
