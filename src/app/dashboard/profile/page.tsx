@@ -92,28 +92,42 @@ export default function ProfilePage() {
 
   async function onProfileSubmit(values: z.infer<typeof profileFormSchema>) {
     if (!userRef || !user) return;
+    
+    // Use a try-catch block for the entire operation
     try {
       const originalEmail = user.email;
+      const originalDisplayName = user.displayName;
+
+      // Update email in Firebase Auth first
       if (values.email !== originalEmail) {
         await updateEmail(user, values.email);
       }
       
+      // Update display name in Firebase Auth
+      const newDisplayName = `${values.firstName} ${values.lastName}`;
+      if (newDisplayName !== originalDisplayName) {
+        await updateProfile(user, { displayName: newDisplayName });
+      }
+      
+      // Prepare Firestore data (exclude email if not changing)
       const { email, ...profileData } = values;
       
+      // Update the user document in Firestore
       await updateDoc(userRef, { ...profileData, email: values.email });
-      await updateProfile(user, { displayName: `${values.firstName} ${values.lastName}` });
       
+      // Log the activity
       logActivity({
         firestore,
         auth,
         action: 'Profile Updated',
-        details: `User updated their profile information. Email changed from ${originalEmail} to ${values.email}.`
+        details: `User updated their profile information.`
       });
 
       toast({
         title: 'Profile Updated',
         description: 'Your profile has been successfully updated.',
       });
+
     } catch (error: any) {
       toast({
         variant: 'destructive',

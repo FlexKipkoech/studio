@@ -1,6 +1,8 @@
 
 import { collection, addDoc, serverTimestamp, Firestore } from 'firebase/firestore';
 import { Auth } from 'firebase/auth';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 type LogActivityInput = {
   firestore: Firestore;
@@ -18,7 +20,7 @@ export function logActivity({ firestore, auth, action, details }: LogActivityInp
   const user = auth.currentUser;
 
   if (!user) {
-    console.error('logActivity failed: User is not authenticated.');
+    console.warn('logActivity was called but user is not authenticated.');
     return;
   }
 
@@ -26,16 +28,21 @@ export function logActivity({ firestore, auth, action, details }: LogActivityInp
     userId: user.uid,
     userName: user.displayName || user.email || 'Unknown User',
     action: action,
-    timestamp: serverTimestamp(), // Use server timestamp for accuracy
+    timestamp: serverTimestamp(),
     details: details,
   };
 
   const activityLogsCollection = collection(firestore, 'activityLogs');
   
-  // Fire-and-forget: Add the document but don't wait for it to complete.
-  // Errors are logged to the console if they occur.
   addDoc(activityLogsCollection, logEntry)
     .catch(error => {
-      console.error('Failed to write activity log:', error);
+       errorEmitter.emit(
+        'permission-error',
+        new FirestorePermissionError({
+          path: activityLogsCollection.path,
+          operation: 'create',
+          requestResourceData: logEntry,
+        })
+      )
     });
 }
