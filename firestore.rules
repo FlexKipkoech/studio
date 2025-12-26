@@ -90,19 +90,21 @@ service cloud.firestore {
       allow create: if isSignedIn();
 
       // READ/LIST: Only active Admins can read the audit logs.
-      allow get, list: if isAdmin() && isUserActive();
+      allow get, list: if isAdmin();
 
       // UPDATE/DELETE: Nobody can modify or delete log entries.
       allow update, delete: if false;
     }
 
     match /invoices/{invoiceId} {
-        // READ: Users can only read their own invoices. 
-        // The client query must filter by userId.
-        allow get, list: if isSignedIn() && isUserActive();
-        
-        // WRITE: Users can only create, update, or delete their own invoices.
-        allow create, update, delete: if isSignedIn() && isUserActive() && request.auth.uid == request.resource.data.userId;
+      // READ (get): A user can read a single invoice only if they own it.
+      allow get: if isUserActive() && isOwner(resource.data.userId);
+
+      // READ (list): A user can list invoices only if the query is filtered by their own userId.
+      allow list: if isUserActive() && request.query.get("userId") == request.auth.uid;
+      
+      // WRITE: Users can only create, update, or delete their own invoices.
+      allow create, update, delete: if isUserActive() && request.auth.uid == request.resource.data.userId;
     }
   }
 }
