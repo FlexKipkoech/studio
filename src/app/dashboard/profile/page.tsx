@@ -167,8 +167,8 @@ export default function ProfilePage() {
     }
   }
 
-  const nameInitial = userProfile?.firstName ? userProfile.firstName.charAt(0) : (user?.email ? user.email.charAt(0) : '');
-  const userAvatar = previewUrl || userProfile?.photoURL || user?.photoURL || '';
+  const nameInitial = userProfile?.firstName ? userProfile.firstName.charAt(0) : (user?.email ? user.email.charAt(0).toUpperCase() : '');
+  const userAvatar = previewUrl || userProfile?.photoURL || user?.photoURL;
 
   return (
     <main className="grid flex-1 items-start gap-4 p-4 sm:px-6 sm:py-0 md:gap-8">
