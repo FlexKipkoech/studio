@@ -18,7 +18,6 @@ import {
   Bell,
   Settings,
   CircleHelp,
-  User,
   History,
 } from 'lucide-react';
 import { useDoc, useFirestore, useMemoFirebase, useUser } from '@/firebase';
@@ -34,11 +33,10 @@ const adminMenuItem = { href: '/dashboard/users', label: 'Users', icon: Users };
 const remainingMenuItems = [
   { href: '/dashboard/reminders', label: 'Reminders', icon: Bell },
   { href: '/dashboard/activity-logs', label: 'Activity Logs', icon: History },
-  { href: '/dashboard/profile', label: 'Profile', icon: User },
 ];
 
 
-const settingsItem = { href: '#', label: 'Settings', icon: Settings };
+const settingsItem = { href: '/dashboard/profile', label: 'Settings', icon: Settings };
 const helpItem = { href: '#', label: 'Help & Support', icon: CircleHelp };
 
 export function SidebarNav() {
@@ -83,10 +81,12 @@ export function SidebarNav() {
       <SidebarFooter className="p-2">
         <SidebarMenu>
           <SidebarMenuItem>
-             <SidebarMenuButton tooltip={settingsItem.label}>
-                  <settingsItem.icon />
-                  <span>{settingsItem.label}</span>
-                </SidebarMenuButton>
+            <Link href={settingsItem.href}>
+               <SidebarMenuButton tooltip={settingsItem.label} isActive={pathname === settingsItem.href}>
+                    <settingsItem.icon />
+                    <span>{settingsItem.label}</span>
+                  </SidebarMenuButton>
+              </Link>
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton tooltip={helpItem.label}>
