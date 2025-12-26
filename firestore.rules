@@ -1,24 +1,27 @@
 /**
- * Core Philosophy: This ruleset enforces a strict user-ownership model. Each user
- * has a dedicated document for their profile information, and they are the only
- * person who can read or write to it. This provides a strong security foundation
- * by isolating user data.
+ * Core Philosophy: This ruleset enforces a strict user-ownership model and ensures
+ * only active users can interact with data. A user's profile information is
+ * private to them, and all data access requires the user to be authenticated and
+ * have an `isActive` flag set to `true` in their own user document.
  *
  * Data Structure: All user-specific data is stored in a top-level `users`
  * collection. The document ID for each user's profile MUST match their Firebase
  * Authentication UID. The structure is `/users/{userId}`.
  *
  * Key Security Decisions:
+ * - Active User Check: The most critical rule. The `isUserActive()` function
+ *   is called in almost every rule to ensure that only users with `isActive == true`
+ *   can perform any operation. This is a global guard against unauthorized access
+ *   from deactivated accounts.
  * - User Privacy: Users can only access their own profile document. They cannot
  *   read other users' data.
  * - No User Listing: Listing the entire `/users` collection is explicitly
  *   disallowed to prevent scraping of user information.
  * - Role Immutability: A user cannot change their own `role` or `isActive` status.
- *   These are considered admin-controlled fields, and allowing users to modify them
- *   would create a major security vulnerability (e.g., self-promotion to 'Admin').
+ *   These are considered admin-controlled fields.
  * - Relational Integrity: The `id` field within a user document is required on
  *   creation to match the document's ID (`userId`), and it cannot be changed on
- *   update. This ensures the data remains consistent with its path.
+ *   update.
  */
 rules_version = '2';
 service cloud.firestore {
@@ -34,14 +37,15 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // For update/delete, checks ownership AND ensures the document already exists.
-    function isExistingOwner(userId) {
-      return isOwner(userId) && resource != null;
-    }
-
     // On create, validates that the internal 'id' field matches the document ID.
     function hasValidUserId(userId) {
       return request.resource.data.id == userId;
+    }
+    
+    // CRITICAL: Checks if the currently authenticated user's own profile has isActive = true.
+    // This is the primary gate for all data access.
+    function isUserActive() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isActive == true;
     }
 
     // On update, prevents a user from changing critical, admin-controlled fields.
@@ -52,22 +56,21 @@ service cloud.firestore {
     }
 
     /**
-     * @description Rules for a user's own profile document. A user can create,
-     * read, update, and delete their own document, but cannot access others'.
+     * @description Rules for a user's own profile document. A user can create their
+     * own document. They can only read, update, or delete it if they are the owner
+     * AND they are marked as active in their profile.
      * @path /users/{userId}
-     * @allow (create) A newly signed-up user with UID 'user123' creating their
-     * profile document at `/users/user123`.
-     * @deny (get) A user with UID 'user123' trying to read `/users/user456`.
+     * @allow (get) An active user 'user123' reading their own profile at `/users/user123`.
+     * @deny (get) A user 'user123' who is `isActive: false` trying to read their own profile.
+     * @deny (get) A user 'user123' trying to read `/users/user456`.
      * @deny (update) A user trying to change their own `role` from 'User' to 'Admin'.
-     * @principle Restricts access to a user's own data tree and enforces immutability
-     * of critical fields like 'role' to prevent privilege escalation.
      */
     match /users/{userId} {
-      allow get: if isOwner(userId);
+      allow get: if isOwner(userId) && isUserActive();
       allow list: if false; // CRITICAL: Prevent listing all users in the database.
       allow create: if isOwner(userId) && hasValidUserId(userId);
-      allow update: if isExistingOwner(userId) && isNotUpdatingCriticalFields();
-      allow delete: if isExistingOwner(userId);
+      allow update: if isOwner(userId) && isUserActive() && isNotUpdatingCriticalFields();
+      allow delete: if isOwner(userId) && isUserActive();
     }
   }
 }

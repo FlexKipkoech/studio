@@ -64,7 +64,7 @@
           "schema": {
             "$ref": "#/backend/entities/User"
           },
-          "description": "Stores user profile data. Includes fields for username, email, name, role and activity status. This collection uses path-based ownership for security. The `role` field is denormalized to simplify role-based access control in security rules.",
+          "description": "Stores user profile data. Includes fields for username, email, name, role and activity status. This collection uses path-based ownership for security. The `role` field is denormalized to simplify role-based access control in security rules. Access is restricted to users who are marked as `isActive`.",
           "params": [
             {
               "name": "userId",
