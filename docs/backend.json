@@ -76,6 +76,47 @@
         }
       },
       "required": ["userId", "userName", "action", "timestamp", "details"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Represents an invoice document, including extracted data and storage reference.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The UID of the user who owns this invoice."
+        },
+        "invoiceNumber": {
+          "type": "string"
+        },
+        "invoiceDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "amountDue": {
+          "type": "number"
+        },
+        "vendorName": {
+          "type": "string"
+        },
+        "vendorAddress": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "paid", "overdue"],
+          "default": "pending"
+        },
+        "storagePath": {
+          "type": "string",
+          "description": "The full path to the invoice PDF in Firebase Storage."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["userId", "invoiceNumber", "amountDue", "vendorName", "storagePath", "createdAt"]
     }
   },
   "auth": {
@@ -116,8 +157,24 @@
             }
           ]
         }
+      },
+       {
+        "path": "/invoices/{invoiceId}",
+        "definition": {
+          "entityName": "Invoice",
+          "schema": {
+            "$ref": "#/backend/entities/Invoice"
+          },
+          "description": "Stores invoice data for individual users. Access is restricted to the user who owns the data.",
+          "params": [
+            {
+              "name": "invoiceId",
+              "description": "The unique identifier for the invoice."
+            }
+          ]
+        }
       }
     ],
-    "reasoning": "This Firestore structure prioritizes security and scalability for the Invoice Management System, adhering to Authorization Independence and QAP principles. User data is stored under `/users/{userId}` ensuring path-based ownership, which simplifies security rules. This structure avoids using `get()` calls in security rules, enabling atomic operations (transactions/batches) and improving debuggability by denormalizing the role to the `users` document. This structure uses segregation by using the path-based ownership approach which makes the structure more secure and easier to debug. A separate collection for activity logs ensures that audit data is stored securely and can be managed independently."
+    "reasoning": "This Firestore structure prioritizes security and scalability for the Invoice Management System, adhering to Authorization Independence and QAP principles. User data is stored under `/users/{userId}` ensuring path-based ownership, which simplifies security rules. This structure avoids using `get()` calls in security rules, enabling atomic operations (transactions/batches) and improving debuggability by denormalizing the role to the `users` document. This structure uses segregation by using the path-based ownership approach which makes the structure more secure and easier to debug. A separate collection for activity logs ensures that audit data is stored securely and can be managed independently. The `/invoices` collection is also secured by user, ensuring data privacy."
   }
 }

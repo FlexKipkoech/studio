@@ -95,5 +95,10 @@ service cloud.firestore {
       // UPDATE/DELETE: Nobody can modify or delete log entries.
       allow update, delete: if false;
     }
+
+    match /invoices/{invoiceId} {
+      // A user can only access invoices that they own (based on the userId field in the document).
+      allow get, list, create, update, delete: if isSignedIn() && request.auth.uid == request.resource.data.userId;
+    }
   }
 }
