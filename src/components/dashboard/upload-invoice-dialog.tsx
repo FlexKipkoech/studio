@@ -111,7 +111,7 @@ export function UploadInvoiceDialog() {
     } catch (error: any) {
         console.error("Error saving invoice:", error);
         
-        let description = 'An unexpected error occurred.';
+        let description = error?.message || 'An unexpected error occurred.';
         if (error.code) {
           switch (error.code) {
             case 'storage/unauthorized':
@@ -122,6 +122,10 @@ export function UploadInvoiceDialog() {
                 'Firestore denied this save. This usually means your user profile is missing or inactive (check /users/{uid}.isActive == true) or the security rules do not allow this operation.';
               break;
           }
+        }
+
+        if (error?.code && description && !description.includes(String(error.code))) {
+          description = `${description} (code: ${String(error.code)})`;
         }
         
         toast({
