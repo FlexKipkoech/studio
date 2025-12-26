@@ -1,3 +1,5 @@
+'use client';
+
 import { MoreHorizontal, PlusCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,22 +25,26 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { users } from '@/lib/data';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { collection } from 'firebase/firestore';
+import { AddUserDialog } from '@/components/dashboard/add-user-dialog';
 
 export default function UsersPage() {
+  const firestore = useFirestore();
+  const usersRef = useMemoFirebase(
+    () => (firestore ? collection(firestore, 'users') : null),
+    [firestore]
+  );
+  const { data: users, isLoading } = useCollection(usersRef);
+
   return (
     <main className="grid flex-1 items-start gap-4 p-4 sm:px-6 sm:py-0 md:gap-8">
       <div className="flex items-center">
         <h2 className="text-2xl font-bold tracking-tight">Users</h2>
         <div className="ml-auto flex items-center gap-2">
-          <Button size="sm" className="h-8 gap-1">
-            <PlusCircle className="h-3.5 w-3.5" />
-            <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-              Add User
-            </span>
-          </Button>
+          <AddUserDialog />
         </div>
       </div>
       <Card>
@@ -63,15 +69,22 @@ export default function UsersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map((user) => (
+              {isLoading && (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center">
+                    Loading users...
+                  </TableCell>
+                </TableRow>
+              )}
+              {!isLoading && users?.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-9 w-9">
-                        <AvatarImage src={user.avatarUrl} alt={user.name} />
-                        <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                        <AvatarImage src={user.photoURL} alt={user.firstName} />
+                        <AvatarFallback>{user.firstName?.charAt(0)}{user.lastName?.charAt(0)}</AvatarFallback>
                       </Avatar>
-                      {user.name}
+                      {user.firstName} {user.lastName}
                     </div>
                   </TableCell>
                   <TableCell>
