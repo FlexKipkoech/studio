@@ -46,6 +46,36 @@
         "role",
         "isActive"
       ]
+    },
+    "ActivityLog": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Activity Log",
+      "type": "object",
+      "description": "Represents a single log entry for a significant system activity.",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The UID of the user who performed the action."
+        },
+        "userName": {
+          "type": "string",
+          "description": "The name of the user who performed the action."
+        },
+        "action": {
+          "type": "string",
+          "description": "A short description of the action performed (e.g., 'User Login', 'Invoice Created')."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The ISO 8601 timestamp of when the action occurred."
+        },
+        "details": {
+          "type": "string",
+          "description": "A detailed description of the event."
+        }
+      },
+      "required": ["userId", "userName", "action", "timestamp", "details"]
     }
   },
   "auth": {
@@ -70,8 +100,24 @@
             }
           ]
         }
+      },
+      {
+        "path": "/activityLogs/{logId}",
+        "definition": {
+          "entityName": "ActivityLog",
+          "schema": {
+            "$ref": "#/backend/entities/ActivityLog"
+          },
+          "description": "Stores a chronological log of all significant activities performed in the system for auditing purposes.",
+          "params": [
+            {
+              "name": "logId",
+              "description": "The unique identifier for the log entry."
+            }
+          ]
+        }
       }
     ],
-    "reasoning": "This Firestore structure prioritizes security and scalability for the Invoice Management System, adhering to Authorization Independence and QAP principles. User data is stored under `/users/{userId}` ensuring path-based ownership, which simplifies security rules. This structure avoids using `get()` calls in security rules, enabling atomic operations (transactions/batches) and improving debuggability by denormalizing the role to the `users` document. This structure uses segregation by using the path-based ownership approach which makes the structure more secure and easier to debug."
+    "reasoning": "This Firestore structure prioritizes security and scalability for the Invoice Management System, adhering to Authorization Independence and QAP principles. User data is stored under `/users/{userId}` ensuring path-based ownership, which simplifies security rules. This structure avoids using `get()` calls in security rules, enabling atomic operations (transactions/batches) and improving debuggability by denormalizing the role to the `users` document. This structure uses segregation by using the path-based ownership approach which makes the structure more secure and easier to debug. A separate collection for activity logs ensures that audit data is stored securely and can be managed independently."
   }
 }

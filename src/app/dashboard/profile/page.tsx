@@ -1,3 +1,4 @@
+
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -22,11 +23,12 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useUser, useDoc, useMemoFirebase } from '@/firebase';
+import { useFirestore, useUser, useDoc, useMemoFirebase, useAuth } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useEffect } from 'react';
 import { Separator } from '@/components/ui/separator';
 import { updateEmail, updatePassword, updateProfile, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
+import { logActivity } from '@/lib/activity-logger';
 
 const profileFormSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
@@ -49,6 +51,7 @@ const passwordFormSchema = z
 export default function ProfilePage() {
   const { user } = useUser();
   const firestore = useFirestore();
+  const auth = useAuth();
   const { toast } = useToast();
 
   const userRef = useMemoFirebase(
@@ -90,7 +93,8 @@ export default function ProfilePage() {
   async function onProfileSubmit(values: z.infer<typeof profileFormSchema>) {
     if (!userRef || !user) return;
     try {
-      if (values.email !== user.email) {
+      const originalEmail = user.email;
+      if (values.email !== originalEmail) {
         await updateEmail(user, values.email);
       }
       
@@ -99,6 +103,13 @@ export default function ProfilePage() {
       await updateDoc(userRef, { ...profileData, email: values.email });
       await updateProfile(user, { displayName: `${values.firstName} ${values.lastName}` });
       
+      logActivity({
+        firestore,
+        auth,
+        action: 'Profile Updated',
+        details: `User updated their profile information. Email changed from ${originalEmail} to ${values.email}.`
+      });
+
       toast({
         title: 'Profile Updated',
         description: 'Your profile has been successfully updated.',
@@ -118,6 +129,14 @@ export default function ProfilePage() {
       const credential = EmailAuthProvider.credential(user.email, values.currentPassword);
       await reauthenticateWithCredential(user, credential);
       await updatePassword(user, values.newPassword);
+
+      logActivity({
+        firestore,
+        auth,
+        action: 'Password Changed',
+        details: 'User successfully changed their password.'
+      });
+
       toast({
         title: 'Password Updated',
         description: 'Your password has been successfully changed.',

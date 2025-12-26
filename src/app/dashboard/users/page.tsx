@@ -1,3 +1,4 @@
+
 'use client';
 
 import { MoreHorizontal } from 'lucide-react';
@@ -28,7 +29,7 @@ import {
 } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { useCollection, useFirestore, useMemoFirebase, useUser } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase, useUser, useAuth } from '@/firebase';
 import { collection, deleteDoc, doc } from 'firebase/firestore';
 import { AddUserDialog } from '@/components/dashboard/add-user-dialog';
 import { useState } from 'react';
@@ -44,6 +45,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { logActivity } from '@/lib/activity-logger';
+
 
 type UserDoc = {
   id: string;
@@ -58,6 +61,7 @@ type UserDoc = {
 export default function UsersPage() {
   const { user: currentUser } = useUser();
   const firestore = useFirestore();
+  const auth = useAuth();
   const { toast } = useToast();
   const usersRef = useMemoFirebase(
     () => (firestore ? collection(firestore, 'users') : null),
@@ -85,6 +89,13 @@ export default function UsersPage() {
     const userDocRef = doc(firestore, 'users', userToDelete.id);
 
     deleteDocumentNonBlocking(userDocRef);
+
+    logActivity({
+      firestore,
+      auth,
+      action: 'User Deleted',
+      details: `Deleted user: ${userToDelete.firstName} ${userToDelete.lastName} (${userToDelete.email}).`,
+    });
 
     toast({
       title: 'User Data Deletion Initiated',

@@ -83,5 +83,17 @@ service cloud.firestore {
       // DELETE: An active Admin can delete any user's Firestore document.
       allow delete: if isAdmin() && isUserActive();
     }
+
+    match /activityLogs/{logId} {
+      // CREATE: Any signed-in user can create a log entry. This is necessary
+      // so that actions performed by non-admin users can be logged.
+      allow create: if isSignedIn();
+
+      // READ/LIST: Only active Admins can read the audit logs.
+      allow get, list: if isAdmin() && isUserActive();
+
+      // UPDATE/DELETE: Nobody can modify or delete log entries.
+      allow update, delete: if false;
+    }
   }
 }

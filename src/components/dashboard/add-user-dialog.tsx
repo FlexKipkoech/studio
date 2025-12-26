@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -33,10 +34,11 @@ import {
 import { PlusCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { initializeApp, deleteApp, getApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail, updateProfile } from 'firebase/auth';
 import { getFirestore, setDoc, doc } from 'firebase/firestore';
 import { firebaseConfig } from '@/firebase/config';
-import { useFirestore } from '@/firebase';
+import { useAuth, useFirestore } from '@/firebase';
+import { logActivity } from '@/lib/activity-logger';
 
 const addUserFormSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
@@ -50,7 +52,8 @@ export function AddUserDialog() {
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
-  const mainFirestoreInstance = useFirestore(); // Use the authenticated firestore instance
+  const mainFirestoreInstance = useFirestore();
+  const mainAuthInstance = useAuth();
 
   const form = useForm<z.infer<typeof addUserFormSchema>>({
     resolver: zodResolver(addUserFormSchema),
@@ -65,8 +68,6 @@ export function AddUserDialog() {
 
   async function onSubmit(values: z.infer<typeof addUserFormSchema>) {
     setIsSubmitting(true);
-    // Create a temporary, secondary Firebase app instance to create a new user
-    // This allows the admin to create a user without being signed out.
     const tempAppName = 'temp-user-creation-app';
     
     try {
@@ -76,22 +77,30 @@ export function AddUserDialog() {
       const userCredential = await createUserWithEmailAndPassword(tempAuth, values.email, values.password);
       const user = userCredential.user;
 
+      // Set the user's display name in Auth
+      await updateProfile(user, { displayName: `${values.firstName} ${values.lastName}` });
+
       const userProfile = {
         id: user.uid,
         firstName: values.firstName,
         lastName: values.lastName,
-        username: values.email.split('@')[0], // default username
+        username: values.email.split('@')[0],
         email: values.email,
         role: values.role,
-        isActive: true, // New users are active by default
+        isActive: true,
       };
 
-      // Use the main, authenticated Firestore instance to write the document
       await setDoc(doc(mainFirestoreInstance, 'users', user.uid), userProfile);
-
-      // Send password reset email to the new user using the temporary auth instance
       await sendPasswordResetEmail(tempAuth, values.email);
       
+      // Log this activity
+      logActivity({
+        firestore: mainFirestoreInstance,
+        auth: mainAuthInstance,
+        action: 'User Created',
+        details: `Created new user: ${values.firstName} ${values.lastName} (${values.email}) with role: ${values.role}.`,
+      });
+
       toast({
         title: 'User Created & Notified',
         description: `User ${values.firstName} ${values.lastName} has been created and a password reset email has been sent.`,
@@ -107,12 +116,10 @@ export function AddUserDialog() {
         description: error.message,
       });
     } finally {
-        // Clean up the temporary app
         try {
             const tempApp = getApp(tempAppName);
             await deleteApp(tempApp);
         } catch (error) {
-            // It's possible the app was not initialized if there was an early error
             console.error("Could not clean up temporary Firebase app:", error)
         }
         setIsSubmitting(false);
