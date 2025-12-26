@@ -68,76 +68,83 @@ export function UploadInvoiceDialog() {
     }
   };
 
-  const handleSaveInvoice = () => {
+  const handleSaveInvoice = async () => {
     if (!file || !summary || !auth.currentUser) return;
     setStep('saving');
 
     const currentUser = auth.currentUser;
-    const currentSummary = summary;
-    const currentFile = file;
+    
+    try {
+        // 1. Upload file to Firebase Storage
+        const storagePath = `invoices/${currentUser.uid}/${Date.now()}_${file.name}`;
+        const storageRef = ref(storage, storagePath);
+        await uploadBytes(storageRef, file);
 
-    // Immediately show success and close dialog
-    setStep('done');
-    toast({
-        title: 'Invoice Upload Initiated',
-        description: `${currentSummary.vendorName} invoice is being saved in the background.`,
-    });
-    setTimeout(() => {
-        resetState();
-        setOpen(false);
-    }, 1500)
+        // 2. Create document in Firestore
+        const invoiceData = {
+            ...summary,
+            userId: currentUser.uid,
+            storagePath: storagePath,
+            status: 'pending',
+            createdAt: serverTimestamp(),
+        };
+        const invoicesCollection = collection(firestore, 'invoices');
+        
+        const docRef = await addDoc(invoicesCollection, invoiceData);
 
+        // 3. Log activity after successful save
+        logActivity({
+            firestore,
+            auth,
+            action: 'Invoice Uploaded',
+            details: `Uploaded invoice ${summary.invoiceNumber} for vendor ${summary.vendorName}.`,
+        });
 
-    // Perform upload and database write in the background
-    const performSave = async () => {
-        try {
-            // 1. Upload file to Firebase Storage
-            const storagePath = `invoices/${currentUser.uid}/${Date.now()}_${currentFile.name}`;
-            const storageRef = ref(storage, storagePath);
-            await uploadBytes(storageRef, currentFile);
+        setStep('done');
+        toast({
+            title: 'Invoice Saved!',
+            description: `${summary.vendorName} invoice has been successfully saved.`,
+        });
 
-            // 2. Create document in Firestore
-            const invoiceData = {
-                ...currentSummary,
-                userId: currentUser.uid,
-                storagePath: storagePath,
-                status: 'pending',
-                createdAt: serverTimestamp(),
-            };
-            const invoicesCollection = collection(firestore, 'invoices');
-            
-            addDoc(invoicesCollection, invoiceData)
-              .then((docRef) => {
-                // 3. Log activity after successful save
-                logActivity({
-                    firestore,
-                    auth,
-                    action: 'Invoice Uploaded',
-                    details: `Uploaded invoice ${currentSummary.invoiceNumber} for vendor ${currentSummary.vendorName}.`,
-                });
-              })
-              .catch(error => {
-                 errorEmitter.emit(
+        // Close dialog after a short delay
+        setTimeout(() => {
+            handleOpenChange(false);
+        }, 1500);
+
+    } catch (error: any) {
+        console.error("Error saving invoice:", error);
+        
+        let description = 'An unexpected error occurred.';
+        if (error.code) {
+          switch (error.code) {
+            case 'storage/unauthorized':
+              description = 'You do not have permission to upload files.';
+              break;
+            case 'permission-denied': // Firestore permission error
+              description = 'You do not have permission to save invoice data.';
+               errorEmitter.emit(
                     'permission-error',
                     new FirestorePermissionError({
-                      path: invoicesCollection.path,
+                      path: collection(firestore, 'invoices').path,
                       operation: 'create',
-                      requestResourceData: invoiceData,
+                      requestResourceData: {userId: currentUser.uid},
                     })
                   );
-              });
-
-        } catch (error: any) {
-            // This error will be for storage upload.
-            // Firestore errors are caught in the .catch block above.
-            console.error("Error saving invoice in background:", error);
-            // We don't show a toast here to avoid bothering the user
-            // for a background task. The error is logged for debugging.
+              break;
+          }
         }
-    };
+        
+        toast({
+            variant: 'destructive',
+            title: 'Save Failed',
+            description: description,
+        });
 
-    performSave();
+        // Reset to confirmation step to allow user to retry
+        setStep('confirm');
+    }
   };
+
 
   const resetState = () => {
     setFile(null);
@@ -147,7 +154,10 @@ export function UploadInvoiceDialog() {
 
   const handleOpenChange = (isOpen: boolean) => {
     if (!isOpen) {
-      resetState();
+      // Use a timeout to avoid clearing state before the closing animation is complete
+      setTimeout(() => {
+        resetState();
+      }, 300);
     }
     setOpen(isOpen);
   };
@@ -218,7 +228,7 @@ export function UploadInvoiceDialog() {
                 {step === 'saving' && <Loader2 className="h-12 w-12 animate-spin text-primary" />}
                 {step === 'done' && <CheckCircle className="h-12 w-12 text-green-500" />}
                 <p className="text-muted-foreground">
-                    {step === 'saving' ? 'Saving invoice...' : 'Upload initiated!'}
+                    {step === 'saving' ? 'Saving invoice...' : 'Invoice Saved!'}
                 </p>
             </div>
         )}
@@ -232,7 +242,7 @@ export function UploadInvoiceDialog() {
                 </>
             )}
              {(step === 'select') && (
-                <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+                <Button variant="outline" onClick={() => handleOpenChange(false)}>Cancel</Button>
             )}
         </DialogFooter>
       </DialogContent>
