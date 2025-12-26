@@ -36,6 +36,7 @@ import { initializeApp, deleteApp, getApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { getFirestore, setDoc, doc } from 'firebase/firestore';
 import { firebaseConfig } from '@/firebase/config';
+import { useFirestore } from '@/firebase';
 
 const addUserFormSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
@@ -49,6 +50,7 @@ export function AddUserDialog() {
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const mainFirestoreInstance = useFirestore(); // Use the authenticated firestore instance
 
   const form = useForm<z.infer<typeof addUserFormSchema>>({
     resolver: zodResolver(addUserFormSchema),
@@ -70,7 +72,6 @@ export function AddUserDialog() {
     try {
       const tempApp = initializeApp(firebaseConfig, tempAppName);
       const tempAuth = getAuth(tempApp);
-      const firestore = getFirestore(tempApp);
       
       const userCredential = await createUserWithEmailAndPassword(tempAuth, values.email, values.password);
       const user = userCredential.user;
@@ -85,9 +86,10 @@ export function AddUserDialog() {
         isActive: true, // New users are active by default
       };
 
-      await setDoc(doc(firestore, 'users', user.uid), userProfile);
+      // Use the main, authenticated Firestore instance to write the document
+      await setDoc(doc(mainFirestoreInstance, 'users', user.uid), userProfile);
 
-      // Send password reset email to the new user
+      // Send password reset email to the new user using the temporary auth instance
       await sendPasswordResetEmail(tempAuth, values.email);
       
       toast({
