@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAuth, useUser } from '@/firebase';
 import { signOut } from 'firebase/auth';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 export function UserNav() {
@@ -52,7 +53,9 @@ export function UserNav() {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem>Profile</DropdownMenuItem>
+          <Link href="/dashboard/profile">
+            <DropdownMenuItem>Profile</DropdownMenuItem>
+          </Link>
           <DropdownMenuItem>Billing</DropdownMenuItem>
           <DropdownMenuItem>Settings</DropdownMenuItem>
         </DropdownMenuGroup>

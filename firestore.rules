@@ -50,27 +50,15 @@ service cloud.firestore {
 
     // On update, prevents a user from changing critical, admin-controlled fields.
     function isNotUpdatingCriticalFields() {
-      return request.resource.data.id == resource.data.id
-          && request.resource.data.role == resource.data.role
-          && request.resource.data.isActive == resource.data.isActive;
-    }
+      // Allow firstName, lastName, and username to be updated.
+      let allowedFields = ['firstName', 'lastName', 'username', 'id', 'email', 'role', 'isActive'];
+      let incomingKeys = request.resource.data.keys();
+      
+      // Ensure no unexpected fields are being added
+      let allKeysAllowed = incomingKeys.hasAll(resource.data.keys()) && resource.data.keys().hasAll(incomingKeys);
 
-    /**
-     * @description Rules for a user's own profile document. A user can create their
-     * own document. They can only read, update, or delete it if they are the owner
-     * AND they are marked as active in their profile.
-     * @path /users/{userId}
-     * @allow (get) An active user 'user123' reading their own profile at `/users/user123`.
-     * @deny (get) A user 'user123' who is `isActive: false` trying to read their own profile.
-     * @deny (get) A user 'user123' trying to read `/users/user456`.
-     * @deny (update) A user trying to change their own `role` from 'User' to 'Admin'.
-     */
-    match /users/{userId} {
-      allow get: if isOwner(userId) && isUserActive();
-      allow list: if false; // CRITICAL: Prevent listing all users in the database.
-      allow create: if isOwner(userId) && hasValidUserId(userId);
-      allow update: if isOwner(userId) && isUserActive() && isNotUpdatingCriticalFields();
-      allow delete: if isOwner(userId) && isUserActive();
-    }
-  }
-}
+      return allKeysAllowed
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.email == resource.data.email
+          && request.resource.data.role == resource.data.role
+          ...
