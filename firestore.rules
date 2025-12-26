@@ -15,8 +15,8 @@
  *   from deactivated accounts.
  * - User Privacy: Users can only access their own profile document. They cannot
  *   read other users' data.
- * - No User Listing: Listing the entire `/users` collection is explicitly
- *   disallowed to prevent scraping of user information.
+ * - Admin User Listing: Listing the entire `/users` collection is only allowed for
+ *   users with an 'Admin' role to allow for user management.
  * - Role Immutability: A user cannot change their own `role` or `isActive` status.
  *   These are considered admin-controlled fields.
  * - Relational Integrity: The `id` field within a user document is required on
@@ -48,6 +48,11 @@ service cloud.firestore {
       return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isActive == true;
     }
 
+    // Returns true if the requesting user has the 'Admin' role.
+    function isAdmin() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
+    }
+
     // On update, prevents a user from changing critical, admin-controlled fields.
     function isNotUpdatingCriticalFields() {
       let allowedFields = ['firstName', 'lastName', 'username', 'email', 'id', 'role', 'isActive'];
@@ -65,8 +70,8 @@ service cloud.firestore {
       // READ: A user can only read their own profile, and only if they are active.
       allow get: if isOwner(userId) && isUserActive();
       
-      // LIST: Disallowed for privacy. No one can list all users.
-      allow list: if false;
+      // LIST: Only admins can list all users.
+      allow list: if isAdmin() && isUserActive();
 
       // CREATE: A user can create their own profile document.
       // - Must be signed in.
