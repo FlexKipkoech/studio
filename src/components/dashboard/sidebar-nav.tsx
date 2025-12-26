@@ -20,20 +20,41 @@ import {
   CircleHelp,
   User,
 } from 'lucide-react';
+import { useDoc, useFirestore, useMemoFirebase, useUser } from '@/firebase';
+import { doc } from 'firebase/firestore';
 
-const menuItems = [
+const baseMenuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/invoices', label: 'Invoices', icon: FileText },
-  { href: '/dashboard/users', label: 'Users', icon: Users },
+];
+
+const adminMenuItem = { href: '/dashboard/users', label: 'Users', icon: Users };
+
+const remainingMenuItems = [
   { href: '/dashboard/reminders', label: 'Reminders', icon: Bell },
   { href: '/dashboard/profile', label: 'Profile', icon: User },
 ];
+
 
 const settingsItem = { href: '#', label: 'Settings', icon: Settings };
 const helpItem = { href: '#', label: 'Help & Support', icon: CircleHelp };
 
 export function SidebarNav() {
   const pathname = usePathname();
+  const { user } = useUser();
+  const firestore = useFirestore();
+
+  const userRef = useMemoFirebase(
+    () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
+    [firestore, user]
+  );
+  const { data: userProfile } = useDoc(userRef);
+
+  const menuItems = [
+    ...baseMenuItems,
+    ...(userProfile?.role === 'Admin' ? [adminMenuItem] : []),
+    ...remainingMenuItems,
+  ]
 
   return (
     <Sidebar variant="sidebar" collapsible="icon">
