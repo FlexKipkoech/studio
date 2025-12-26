@@ -6,6 +6,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -19,6 +20,7 @@ import {
 } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
+import Link from 'next/link';
 
 function GoogleIcon(props: React.SVGProps<SVGSVGElement>) {
     return (
@@ -135,6 +137,14 @@ export default function LoginPage() {
             Google
           </Button>
         </CardContent>
+        <CardFooter className="flex-col gap-2">
+           <div className="text-sm text-muted-foreground">
+              Don&apos;t have an account?{' '}
+              <Link href="/signup" className="text-primary hover:underline">
+                Sign up
+              </Link>
+            </div>
+        </CardFooter>
       </Card>
     </div>
   );
