@@ -7,7 +7,7 @@ export function Header() {
       <div className="flex items-center gap-2">
         <SidebarTrigger className="md:hidden" />
         <h1 className="text-lg font-semibold md:text-xl">
-          Invoice Management
+          Invoice Management System
         </h1>
       </div>
       <UserNav />
