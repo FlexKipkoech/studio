@@ -18,6 +18,7 @@ import {
   Bell,
   Settings,
   CircleHelp,
+  User,
 } from 'lucide-react';
 
 const menuItems = [
@@ -25,6 +26,7 @@ const menuItems = [
   { href: '/dashboard/invoices', label: 'Invoices', icon: FileText },
   { href: '/dashboard/users', label: 'Users', icon: Users },
   { href: '/dashboard/reminders', label: 'Reminders', icon: Bell },
+  { href: '/dashboard/profile', label: 'Profile', icon: User },
 ];
 
 const settingsItem = { href: '#', label: 'Settings', icon: Settings };

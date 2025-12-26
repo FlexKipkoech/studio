@@ -108,7 +108,7 @@ export default function ProfilePage() {
         description: 'Your password has been successfully changed.',
       });
       passwordForm.reset();
-    } catch (error: any) {
+    } catch (error: any)      {
       toast({
         variant: 'destructive',
         title: 'Error updating password',
@@ -231,4 +231,9 @@ export default function ProfilePage() {
                 </Button>
               </form>
             </Form>
-          </
+          </CardContent>
+        </Card>
+      </div>
+    </main>
+  );
+}
