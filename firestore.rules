@@ -99,10 +99,13 @@ service cloud.firestore {
     match /invoices/{invoiceId} {
       // READ (get, list): Any active user can read any invoice or list all invoices.
       allow get, list: if isUserActive();
-      
-      // WRITE (create, update, delete): A user can write to an invoice only if they are active
-      // and the document's userId matches their own UID. This maintains ownership for modifications.
-      allow write: if isUserActive() && request.auth.uid == request.resource.data.userId;
+
+      // CREATE/UPDATE: A user can create/update an invoice only if they are active
+      // and the document's userId matches their own UID.
+      allow create, update: if isUserActive() && request.auth.uid == request.resource.data.userId;
+
+      // DELETE: Only active Admins can delete an invoice.
+      allow delete: if isAdmin() && isUserActive();
     }
   }
 }

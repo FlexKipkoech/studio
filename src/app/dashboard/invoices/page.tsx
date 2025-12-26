@@ -31,8 +31,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
+import { useCollection, useFirestore, useUser, useMemoFirebase, useDoc } from '@/firebase';
+import { collection, query, where, doc } from 'firebase/firestore';
 import { UploadInvoiceDialog } from '@/components/dashboard/upload-invoice-dialog';
 
 export type Invoice = {
@@ -50,15 +50,23 @@ export default function InvoicesPage() {
   const [activeTab, setActiveTab] = useState('all');
 
   const invoicesQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
+    if (!firestore) return null;
     const baseQuery = query(collection(firestore, 'invoices'));
     if (activeTab === 'all') {
       return baseQuery;
     }
     return query(baseQuery, where('status', '==', activeTab));
-  }, [firestore, user, activeTab]);
+  }, [firestore, activeTab]);
+
+  const userRef = useMemoFirebase(
+    () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
+    [firestore, user]
+  );
+  const { data: userProfile } = useDoc(userRef);
 
   const { data: invoices, isLoading } = useCollection<Invoice>(invoicesQuery);
+
+  const isAdmin = userProfile?.role === 'Admin';
 
   return (
     <main className="grid flex-1 items-start gap-4 p-4 sm:px-6 sm:py-0 md:gap-8">
@@ -174,10 +182,14 @@ export default function InvoicesPage() {
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                             <DropdownMenuItem>View Details</DropdownMenuItem>
                             <DropdownMenuItem>Send Reminder</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive">
-                              Delete
-                            </DropdownMenuItem>
+                            {isAdmin && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="text-destructive">
+                                  Delete
+                                </DropdownMenuItem>
+                              </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
