@@ -73,23 +73,21 @@ export function UploadInvoiceDialog() {
     setStep('saving');
 
     const currentUser = auth.currentUser;
+    const invoiceData = {
+      ...summary,
+      userId: currentUser.uid,
+      storagePath: `invoices/${currentUser.uid}/${Date.now()}_${file.name}`,
+      status: 'pending',
+      createdAt: serverTimestamp(),
+    };
     
     try {
         // 1. Upload file to Firebase Storage
-        const storagePath = `invoices/${currentUser.uid}/${Date.now()}_${file.name}`;
-        const storageRef = ref(storage, storagePath);
+        const storageRef = ref(storage, invoiceData.storagePath);
         await uploadBytes(storageRef, file);
 
         // 2. Create document in Firestore
-        const invoiceData = {
-            ...summary,
-            userId: currentUser.uid,
-            storagePath: storagePath,
-            status: 'pending',
-            createdAt: serverTimestamp(),
-        };
         const invoicesCollection = collection(firestore, 'invoices');
-        
         const docRef = await addDoc(invoicesCollection, invoiceData);
 
         // 3. Log activity after successful save
@@ -127,7 +125,7 @@ export function UploadInvoiceDialog() {
                     new FirestorePermissionError({
                       path: collection(firestore, 'invoices').path,
                       operation: 'create',
-                      requestResourceData: {userId: currentUser.uid},
+                      requestResourceData: invoiceData,
                     })
                   );
               break;
