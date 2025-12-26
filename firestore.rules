@@ -55,8 +55,6 @@ service cloud.firestore {
 
     // On update, prevents a user from changing critical, admin-controlled fields.
     function isNotUpdatingCriticalFields() {
-      // This rule is currently too restrictive for email updates and should be refined.
-      // For now, it allows editing 'firstName', 'lastName', and 'username'.
       let allowedFields = ['firstName', 'lastName', 'username', 'email'];
       let incomingKeys = request.resource.data.keys();
       
@@ -75,23 +73,15 @@ service cloud.firestore {
       // LIST: Only active admins can list all users.
       allow list: if isAdmin() && isUserActive();
 
-      // CREATE: A user can create their own profile document.
-      // - Must be signed in.
-      // - The new document's ID must match their auth UID.
-      // - The internal `id` field must also match their auth UID.
-      // - On creation, a user cannot set their own role or isActive status.
-      allow create: if isOwner(userId) 
-                      && hasValidUserId(userId)
-                      && request.resource.data.role == 'Finance Team'
-                      && request.resource.data.isActive == true;
+      // CREATE: An admin user can create a new user profile.
+      allow create: if isAdmin() && isUserActive();
 
       // UPDATE: A user can update their own profile, but not critical fields.
-      // - Must be the owner and an active user.
-      // - Cannot change `role`, `isActive`, or the `id` field.
-      allow update: if isOwner(userId) && isUserActive() && isNotUpdatingCriticalFields();
+      // An Admin can update any user's profile.
+      allow update: if (isOwner(userId) && isUserActive() && isNotUpdatingCriticalFields()) || (isAdmin() && isUserActive());
 
-      // DELETE: An active Admin can delete any user except for themselves.
-      allow delete: if isAdmin() && isUserActive() && request.auth.uid != userId;
+      // DELETE: An active Admin can delete any user's Firestore document.
+      allow delete: if isAdmin() && isUserActive();
     }
   }
 }

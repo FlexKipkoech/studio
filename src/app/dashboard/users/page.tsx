@@ -43,8 +43,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
 import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 type UserDoc = {
@@ -86,13 +84,11 @@ export default function UsersPage() {
     setIsDeleting(true);
     const userDocRef = doc(firestore, 'users', userToDelete.id);
 
-    // This uses a non-blocking delete. The UI will update automatically
-    // via the useCollection real-time listener.
     deleteDocumentNonBlocking(userDocRef);
 
     toast({
-      title: 'User Deletion Initiated',
-      description: `The user ${userToDelete.firstName} ${userToDelete.lastName} will be removed shortly.`,
+      title: 'User Data Deletion Initiated',
+      description: `The user document for ${userToDelete.firstName} ${userToDelete.lastName} will be removed shortly.`,
     });
 
     setIsDeleting(false);
@@ -197,7 +193,7 @@ export default function UsersPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the user's document. Deleting the authentication entry requires server-side admin privileges.
+              This action cannot be undone. This will permanently delete the user's document from Firestore, but it will not delete their authentication credentials. To fully delete the user, you must also remove them from the Firebase Authentication console.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
