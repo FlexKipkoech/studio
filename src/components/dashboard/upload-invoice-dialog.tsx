@@ -21,7 +21,6 @@ import { useAuth, useFirestore, useStorage } from '@/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { logActivity } from '@/lib/activity-logger';
-import { FirestorePermissionError, errorEmitter } from '@/firebase';
 
 type UploadStep = 'select' | 'analyzing' | 'confirm' | 'saving' | 'done';
 
@@ -119,15 +118,8 @@ export function UploadInvoiceDialog() {
               description = 'You do not have permission to upload files.';
               break;
             case 'permission-denied': // Firestore permission error
-              description = 'You do not have permission to save invoice data.';
-               errorEmitter.emit(
-                    'permission-error',
-                    new FirestorePermissionError({
-                      path: collection(firestore, 'invoices').path,
-                      operation: 'create',
-                      requestResourceData: invoiceData,
-                    })
-                  );
+              description =
+                'Firestore denied this save. This usually means your user profile is missing or inactive (check /users/{uid}.isActive == true) or the security rules do not allow this operation.';
               break;
           }
         }

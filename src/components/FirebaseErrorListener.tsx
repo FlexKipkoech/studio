@@ -11,12 +11,22 @@ import { FirestorePermissionError } from '@/firebase/errors';
 export function FirebaseErrorListener() {
   // Use the specific error type for the state for type safety.
   const [error, setError] = useState<FirestorePermissionError | null>(null);
+  const shouldThrow =
+    process.env.NEXT_PUBLIC_THROW_FIREBASE_PERMISSION_ERRORS === 'true';
 
   useEffect(() => {
     // The callback now expects a strongly-typed error, matching the event payload.
     const handleError = (error: FirestorePermissionError) => {
-      // Set error in state to trigger a re-render.
-      setError(error);
+      if (shouldThrow) {
+        // Set error in state to trigger a re-render and throw.
+        setError(error);
+        return;
+      }
+
+      // Default behavior: don't crash the whole app.
+      // Log the structured error so it's still debuggable.
+      // eslint-disable-next-line no-console
+      console.error(error);
     };
 
     // The typed emitter will enforce that the callback for 'permission-error'
@@ -30,7 +40,7 @@ export function FirebaseErrorListener() {
   }, []);
 
   // On re-render, if an error exists in state, throw it.
-  if (error) {
+  if (shouldThrow && error) {
     throw error;
   }
 

@@ -33,16 +33,21 @@ export function logActivity({ firestore, auth, action, details }: LogActivityInp
   };
 
   const activityLogsCollection = collection(firestore, 'activityLogs');
+  const shouldEmitPermissionErrors =
+    process.env.NEXT_PUBLIC_EMIT_FIREBASE_PERMISSION_ERRORS === 'true' ||
+    process.env.NEXT_PUBLIC_THROW_FIREBASE_PERMISSION_ERRORS === 'true';
   
   addDoc(activityLogsCollection, logEntry)
     .catch(error => {
-       errorEmitter.emit(
-        'permission-error',
-        new FirestorePermissionError({
-          path: activityLogsCollection.path,
-          operation: 'create',
-          requestResourceData: logEntry,
-        })
-      )
+      if (shouldEmitPermissionErrors) {
+        errorEmitter.emit(
+          'permission-error',
+          new FirestorePermissionError({
+            path: activityLogsCollection.path,
+            operation: 'create',
+            requestResourceData: logEntry,
+          })
+        )
+      }
     });
 }

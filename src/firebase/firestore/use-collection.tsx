@@ -60,6 +60,9 @@ export function useCollection<T = any>(
   const [data, setData] = useState<StateDataType>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<FirestoreError | Error | null>(null);
+  const shouldEmitPermissionErrors =
+    process.env.NEXT_PUBLIC_EMIT_FIREBASE_PERMISSION_ERRORS === 'true' ||
+    process.env.NEXT_PUBLIC_THROW_FIREBASE_PERMISSION_ERRORS === 'true';
 
   useEffect(() => {
     if (!memoizedTargetRefOrQuery) {
@@ -100,13 +103,15 @@ export function useCollection<T = any>(
         setData(null)
         setIsLoading(false)
 
-        // trigger global error propagation
-        errorEmitter.emit('permission-error', contextualError);
+        // Optional global propagation (off by default)
+        if (shouldEmitPermissionErrors) {
+          errorEmitter.emit('permission-error', contextualError);
+        }
       }
     );
 
     return () => unsubscribe();
-  }, [memoizedTargetRefOrQuery]); // Re-run if the target query/reference changes.
+  }, [memoizedTargetRefOrQuery, shouldEmitPermissionErrors]); // Re-run if the target query/reference changes.
   if(memoizedTargetRefOrQuery && !memoizedTargetRefOrQuery.__memo) {
     throw new Error(memoizedTargetRefOrQuery + ' was not properly memoized using useMemoFirebase');
   }
