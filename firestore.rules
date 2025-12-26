@@ -97,18 +97,16 @@ service cloud.firestore {
     }
 
     match /invoices/{invoiceId} {
-      // READ (get): A user can read a single invoice only if they own it.
+      // READ (get): A user can read a single invoice only if they are active and own it.
       allow get: if isUserActive() && isOwner(resource.data.userId);
 
-      // READ (list): A user can list invoices only if the query is filtered by their own userId.
-      // This handles both the "all" tab (one where clause) and the status tabs (two where clauses).
-      allow list: if isUserActive() && (
-        (request.query.where.size() == 1 && request.query.where.userId == request.auth.uid) ||
-        (request.query.where.size() == 2 && request.query.where.userId == request.auth.uid && request.query.where.keys().hasAny(['status']))
-      );
+      // READ (list): A user can list invoices only if they are active and their query is explicitly
+      // filtered by their own userId. This is the critical security constraint for listing.
+      allow list: if isUserActive() && request.query.where.get('userId') == request.auth.uid;
       
-      // WRITE: Users can only create, update, or delete their own invoices.
-      allow create, update, delete: if isUserActive() && request.auth.uid == request.resource.data.userId;
+      // WRITE (create, update, delete): A user can write to an invoice only if they are active
+      // and the document's userId matches their own UID.
+      allow write: if isUserActive() && request.auth.uid == request.resource.data.userId;
     }
   }
 }
