@@ -55,7 +55,7 @@ service cloud.firestore {
 
     // On update, prevents a user from changing critical, admin-controlled fields.
     function isNotUpdatingCriticalFields() {
-      let allowedFields = ['firstName', 'lastName', 'username', 'email', 'id', 'role', 'isActive'];
+      let allowedFields = ['firstName', 'lastName', 'username', 'email'];
       let incomingKeys = request.resource.data.keys();
       
       let allKeysAllowed = incomingKeys.hasAll(resource.data.keys()) && resource.data.keys().hasAll(incomingKeys);
@@ -70,7 +70,7 @@ service cloud.firestore {
       // READ: A user can only read their own profile, and only if they are active.
       allow get: if isOwner(userId) && isUserActive();
       
-      // LIST: Only admins can list all users.
+      // LIST: Only active admins can list all users.
       allow list: if isAdmin() && isUserActive();
 
       // CREATE: A user can create their own profile document.
