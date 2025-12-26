@@ -26,7 +26,7 @@ import { useFirestore, useUser, useDoc, useMemoFirebase } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useEffect } from 'react';
 import { Separator } from '@/components/ui/separator';
-import { updateEmail, updatePassword, updateProfile } from 'firebase/auth';
+import { updateEmail, updatePassword, updateProfile, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 
 const profileFormSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
@@ -37,6 +37,7 @@ const profileFormSchema = z.object({
 
 const passwordFormSchema = z
   .object({
+    currentPassword: z.string().min(1, 'Current password is required.'),
     newPassword: z.string().min(8, 'Password must be at least 8 characters.'),
     confirmPassword: z.string(),
   })
@@ -69,6 +70,7 @@ export default function ProfilePage() {
   const passwordForm = useForm<z.infer<typeof passwordFormSchema>>({
     resolver: zodResolver(passwordFormSchema),
     defaultValues: {
+      currentPassword: '',
       newPassword: '',
       confirmPassword: '',
     },
@@ -111,8 +113,10 @@ export default function ProfilePage() {
   }
 
   async function onPasswordSubmit(values: z.infer<typeof passwordFormSchema>) {
-    if (!user) return;
+    if (!user || !user.email) return;
     try {
+      const credential = EmailAuthProvider.credential(user.email, values.currentPassword);
+      await reauthenticateWithCredential(user, credential);
       await updatePassword(user, values.newPassword);
       toast({
         title: 'Password Updated',
@@ -227,6 +231,19 @@ export default function ProfilePage() {
                 onSubmit={passwordForm.handleSubmit(onPasswordSubmit)}
                 className="space-y-8"
               >
+                <FormField
+                  control={passwordForm.control}
+                  name="currentPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Current Password</FormLabel>
+                      <FormControl>
+                        <Input type="password" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={passwordForm.control}
                   name="newPassword"
