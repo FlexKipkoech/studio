@@ -55,6 +55,8 @@ service cloud.firestore {
 
     // On update, prevents a user from changing critical, admin-controlled fields.
     function isNotUpdatingCriticalFields() {
+      // This rule is currently too restrictive for email updates and should be refined.
+      // For now, it allows editing 'firstName', 'lastName', and 'username'.
       let allowedFields = ['firstName', 'lastName', 'username', 'email'];
       let incomingKeys = request.resource.data.keys();
       
@@ -88,7 +90,7 @@ service cloud.firestore {
       // - Cannot change `role`, `isActive`, or the `id` field.
       allow update: if isOwner(userId) && isUserActive() && isNotUpdatingCriticalFields();
 
-      // DELETE: Admins can delete user documents, but not their own.
+      // DELETE: An active Admin can delete any user except for themselves.
       allow delete: if isAdmin() && isUserActive() && request.auth.uid != userId;
     }
   }

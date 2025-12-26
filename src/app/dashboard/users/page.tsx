@@ -45,6 +45,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 type UserDoc = {
   id: string;
@@ -70,51 +71,32 @@ export default function UsersPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDeleteUser = async () => {
-    if (!userToDelete || !firestore) return;
-    
-    // Prevent admin from deleting themselves
-    if (currentUser?.uid === userToDelete.id) {
-        toast({
-            variant: 'destructive',
-            title: 'Action Not Allowed',
-            description: 'You cannot delete your own account.',
-        });
-        setUserToDelete(null);
-        return;
+    if (!userToDelete || !firestore || !currentUser) return;
+
+    if (currentUser.uid === userToDelete.id) {
+      toast({
+        variant: 'destructive',
+        title: 'Action Not Allowed',
+        description: 'Administrators cannot delete their own accounts.',
+      });
+      setUserToDelete(null);
+      return;
     }
 
     setIsDeleting(true);
     const userDocRef = doc(firestore, 'users', userToDelete.id);
 
-    try {
-      // Note: This only deletes the Firestore document.
-      // Deleting the user from Firebase Auth requires admin privileges
-      // and is typically done via a server-side function, which is outside
-      // the scope of this client-only operation.
-      // For this example, we proceed with document deletion.
-      
-      await deleteDoc(userDocRef);
+    // This uses a non-blocking delete. The UI will update automatically
+    // via the useCollection real-time listener.
+    deleteDocumentNonBlocking(userDocRef);
 
-      toast({
-        title: 'User Document Deleted',
-        description: `The document for ${userToDelete.firstName} ${userToDelete.lastName} has been deleted.`,
-      });
-    } catch (error: any) {
-        const permissionError = new FirestorePermissionError({
-            path: userDocRef.path,
-            operation: 'delete',
-        });
-        errorEmitter.emit('permission-error', permissionError);
+    toast({
+      title: 'User Deletion Initiated',
+      description: `The user ${userToDelete.firstName} ${userToDelete.lastName} will be removed shortly.`,
+    });
 
-        toast({
-            variant: 'destructive',
-            title: 'Error Deleting User',
-            description: 'You do not have permission to delete this user.',
-        });
-    } finally {
-        setIsDeleting(false);
-        setUserToDelete(null);
-    }
+    setIsDeleting(false);
+    setUserToDelete(null);
   };
 
 
@@ -195,6 +177,7 @@ export default function UsersPage() {
                            <DropdownMenuItem
                             className="text-destructive"
                             onClick={() => setUserToDelete(user as UserDoc)}
+                            disabled={currentUser?.uid === user.id}
                           >
                             Delete
                           </DropdownMenuItem>
