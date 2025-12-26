@@ -16,7 +16,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PlusCircle, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { generateInvoiceSummary, InvoiceSummaryOutput } from '@/ai/flows/generate-invoice-summary';
 import { useAuth, useFirestore, useStorage } from '@/firebase';
 import { ref, uploadBytes, uploadBytesResumable, UploadTask } from 'firebase/storage';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -24,20 +23,9 @@ import { logActivity } from '@/lib/activity-logger';
 
 type UploadStep = 'select' | 'analyzing' | 'confirm' | 'saving' | 'done';
 
-function fileToDataUri(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Failed to read file.'));
-    reader.onabort = () => reject(new Error('File reading was aborted.'));
-    reader.onload = () => resolve(reader.result as string);
-    reader.readAsDataURL(file);
-  });
-}
-
 export function UploadInvoiceDialog() {
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
-  const [summary, setSummary] = useState<InvoiceSummaryOutput | null>(null);
   const [step, setStep] = useState<UploadStep>('select');
   const [storagePath, setStoragePath] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -107,12 +95,12 @@ export function UploadInvoiceDialog() {
         return;
       }
 
-      // Guardrail: large PDFs can be slow to base64 + analyze.
+      // Guardrail: large PDFs can be slow to upload.
       if (selectedFile.size > 10 * 1024 * 1024) {
         toast({
           title: 'Large PDF',
           description:
-            'This invoice is larger than 10MB. Upload/analysis may take longer.',
+            'This invoice is larger than 10MB. Upload may take longer.',
         });
       }
 
@@ -123,19 +111,20 @@ export function UploadInvoiceDialog() {
         const path = `invoices/${currentUser.uid}/${Date.now()}_${selectedFile.name}`;
         setStoragePath(path);
 
-        // Start uploading in the background while we run AI analysis.
+        // Start uploading immediately. AI extraction will run on the server after Save.
         startBackgroundUpload(selectedFile, path);
 
-        const dataUri = await fileToDataUri(selectedFile);
-        const result = await generateInvoiceSummary({ invoicePdfDataUri: dataUri });
-        setSummary(result);
+        // Move to confirmation once the upload completes.
+        if (uploadPromiseRef.current) {
+          await uploadPromiseRef.current;
+        }
         setStep('confirm');
       } catch (error) {
         console.error(error);
         toast({
           variant: 'destructive',
-          title: 'Analysis Failed',
-          description: 'Could not extract information from the PDF.',
+          title: 'Upload Failed',
+          description: 'Could not upload the PDF invoice.',
         });
         resetState();
       }
@@ -150,7 +139,7 @@ export function UploadInvoiceDialog() {
   };
 
   const handleSaveInvoice = async () => {
-    if (!file || !summary || !auth.currentUser) return;
+    if (!file || !auth.currentUser) return;
     setStep('saving');
 
     const currentUser = auth.currentUser;
@@ -182,30 +171,56 @@ export function UploadInvoiceDialog() {
     }
 
     const invoiceData = {
-      ...summary,
       userId: currentUser.uid,
       storagePath: finalStoragePath,
       status: 'pending',
       createdAt: serverTimestamp(),
+
+      // Placeholders until server-side extraction fills these.
+      invoiceNumber: '',
+      invoiceDate: '',
+      amountDue: 0,
+      vendorName: '',
+      vendorAddress: '',
+
+      extractionStatus: 'processing',
     };
     
     try {
         // Create document in Firestore
         const invoicesCollection = collection(firestore, 'invoices');
-        await addDoc(invoicesCollection, invoiceData);
+        const docRef = await addDoc(invoicesCollection, invoiceData);
+
+        // Kick off server-side extraction without blocking the UI.
+        void fetch('/api/invoices/extract', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            invoiceId: docRef.id,
+            storagePath: finalStoragePath,
+          }),
+        }).catch((err) => {
+          console.error('Failed to start server-side extraction:', err);
+          toast({
+            variant: 'destructive',
+            title: 'Extraction Not Started',
+            description:
+              'The invoice was uploaded, but AI extraction could not be started. You can retry later.',
+          });
+        });
 
         // 3. Log activity after successful save
         logActivity({
             firestore,
             auth,
             action: 'Invoice Uploaded',
-            details: `Uploaded invoice ${summary.invoiceNumber} for vendor ${summary.vendorName}.`,
+          details: `Uploaded invoice PDF to ${finalStoragePath}.`,
         });
 
         setStep('done');
         toast({
             title: 'Invoice Saved!',
-            description: `${summary.vendorName} invoice has been successfully saved.`,
+          description: 'Invoice saved. Extracting details in the background…',
         });
 
         // Close dialog after a short delay
@@ -250,7 +265,6 @@ export function UploadInvoiceDialog() {
     uploadTaskRef.current = null;
     uploadPromiseRef.current = null;
     setFile(null);
-    setSummary(null);
     setStoragePath(null);
     setUploadProgress(null);
     setIsUploadComplete(false);
@@ -298,41 +312,37 @@ export function UploadInvoiceDialog() {
             <div className="flex flex-col items-center justify-center gap-4 py-8">
                 <Loader2 className="h-12 w-12 animate-spin text-primary" />
                 <div className="space-y-1 text-center">
-                  <p className="text-muted-foreground">Analyzing your invoice...</p>
+                  <p className="text-muted-foreground">Uploading your invoice PDF...</p>
                   {uploadProgress !== null && uploadProgress < 100 && (
                     <p className="text-xs text-muted-foreground">
-                      Uploading PDF… {uploadProgress}%
+                      Upload progress: {uploadProgress}%
+                    </p>
+                  )}
+                  {uploadProgress === 100 && (
+                    <p className="text-xs text-muted-foreground">
+                      Upload complete.
                     </p>
                   )}
                 </div>
             </div>
         )}
 
-        {step === 'confirm' && summary && (
-            <div className="space-y-4 py-4">
-                <div className="rounded-md border bg-muted/50 p-4 space-y-2">
-                    <h3 className="font-semibold">Extracted Information</h3>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                        <p className="text-muted-foreground">Invoice #:</p>
-                        <p className="font-medium text-right">{summary.invoiceNumber}</p>
-
-                        <p className="text-muted-foreground">Vendor:</p>
-                        <p className="font-medium text-right">{summary.vendorName}</p>
-
-                        <p className="text-muted-foreground">Amount Due:</p>
-                        <p className="font-medium text-right">${summary.amountDue.toLocaleString()}</p>
-
-                        <p className="text-muted-foreground">Invoice Date:</p>
-                        <p className="font-medium text-right">{summary.invoiceDate}</p>
-                    </div>
-                </div>
-                 <div className="flex items-start gap-3 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-yellow-900 dark:border-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
-                    <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-                    <p className="text-xs">
-                        Please verify the extracted information is correct before saving. You can edit these details later.
-                    </p>
-                </div>
+        {step === 'confirm' && (
+          <div className="space-y-4 py-4">
+            <div className="rounded-md border bg-muted/50 p-4 space-y-2">
+              <h3 className="font-semibold">Ready to Save</h3>
+              <div className="text-sm text-muted-foreground">
+                <p>PDF uploaded successfully.</p>
+                {file?.name && <p>File: <span className="font-medium text-foreground">{file.name}</span></p>}
+              </div>
             </div>
+             <div className="flex items-start gap-3 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-yellow-900 dark:border-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
+              <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+              <p className="text-xs">
+                After you save, we will extract invoice details in the background. The invoice will appear right away, and fields will populate shortly.
+              </p>
+            </div>
+          </div>
         )}
 
         {(step === 'saving' || step === 'done') && (
