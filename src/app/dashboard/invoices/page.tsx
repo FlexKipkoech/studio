@@ -51,7 +51,7 @@ export default function InvoicesPage() {
 
   const invoicesQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    const baseQuery = query(collection(firestore, 'invoices'), where('userId', '==', user.uid));
+    const baseQuery = query(collection(firestore, 'invoices'));
     if (activeTab === 'all') {
       return baseQuery;
     }
