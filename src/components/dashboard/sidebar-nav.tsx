@@ -19,6 +19,7 @@ import {
   Settings,
   CircleHelp,
   User,
+  History,
 } from 'lucide-react';
 import { useDoc, useFirestore, useMemoFirebase, useUser } from '@/firebase';
 import { doc } from 'firebase/firestore';
@@ -32,6 +33,7 @@ const adminMenuItem = { href: '/dashboard/users', label: 'Users', icon: Users };
 
 const remainingMenuItems = [
   { href: '/dashboard/reminders', label: 'Reminders', icon: Bell },
+  { href: '/dashboard/activity-logs', label: 'Activity Logs', icon: History },
   { href: '/dashboard/profile', label: 'Profile', icon: User },
 ];
 

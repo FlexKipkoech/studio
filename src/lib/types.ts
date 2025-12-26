@@ -24,3 +24,11 @@ export type Reminder = {
   method: 'Email' | 'WhatsApp';
   status: 'Sent' | 'Failed';
 };
+
+export type ActivityLog = {
+  id: string;
+  user: string;
+  action: string;
+  timestamp: string;
+  details: string;
+};
