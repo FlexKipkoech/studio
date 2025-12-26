@@ -71,7 +71,7 @@ service cloud.firestore {
       allow get: if isOwner(userId) && isUserActive();
       
       // LIST: Only active admins can list all users.
-      allow list: if isAdmin();
+      allow list: if isAdmin() && isUserActive();
 
       // CREATE: An admin user can create a new user profile.
       allow create: if isAdmin() && isUserActive();
@@ -90,7 +90,7 @@ service cloud.firestore {
       allow create: if isSignedIn();
 
       // READ/LIST: Only active Admins can read the audit logs.
-      allow get, list: if isAdmin();
+      allow get, list: if isAdmin() && isUserActive();
 
       // UPDATE/DELETE: Nobody can modify or delete log entries.
       allow update, delete: if false;
@@ -101,7 +101,7 @@ service cloud.firestore {
       allow get: if isUserActive() && isOwner(resource.data.userId);
 
       // READ (list): A user can list invoices only if the query is filtered by their own userId.
-      allow list: if isUserActive() && request.query.get("userId") == request.auth.uid;
+      allow list: if isUserActive() && request.query.where.size() == 1 && request.query.where.userId == request.auth.uid || (request.query.where.size() == 2 && request.query.where.userId == request.auth.uid);
       
       // WRITE: Users can only create, update, or delete their own invoices.
       allow create, update, delete: if isUserActive() && request.auth.uid == request.resource.data.userId;
