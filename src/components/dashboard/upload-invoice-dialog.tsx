@@ -21,6 +21,7 @@ import { useAuth, useFirestore, useStorage } from '@/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { logActivity } from '@/lib/activity-logger';
+import { FirestorePermissionError, errorEmitter } from '@/firebase';
 
 type UploadStep = 'select' | 'analyzing' | 'confirm' | 'saving' | 'done';
 
@@ -67,54 +68,75 @@ export function UploadInvoiceDialog() {
     }
   };
 
-  const handleSaveInvoice = async () => {
+  const handleSaveInvoice = () => {
     if (!file || !summary || !auth.currentUser) return;
     setStep('saving');
 
-    try {
-      // 1. Upload file to Firebase Storage
-      const storagePath = `invoices/${auth.currentUser.uid}/${Date.now()}_${file.name}`;
-      const storageRef = ref(storage, storagePath);
-      await uploadBytes(storageRef, file);
+    const currentUser = auth.currentUser;
+    const currentSummary = summary;
+    const currentFile = file;
 
-      // 2. Create document in Firestore
-      const invoiceData = {
-        ...summary,
-        userId: auth.currentUser.uid,
-        storagePath: storagePath,
-        status: 'pending',
-        createdAt: serverTimestamp(),
-      };
-      const docRef = await addDoc(collection(firestore, 'invoices'), invoiceData);
-
-      // 3. Log activity
-      logActivity({
-        firestore,
-        auth,
-        action: 'Invoice Uploaded',
-        details: `Uploaded invoice ${summary.invoiceNumber} for vendor ${summary.vendorName}.`,
-      });
-
-      setStep('done');
-      toast({
-        title: 'Invoice Saved',
-        description: `${summary.vendorName} invoice has been successfully saved.`,
-      });
-      
-      setTimeout(() => {
+    // Immediately show success and close dialog
+    setStep('done');
+    toast({
+        title: 'Invoice Upload Initiated',
+        description: `${currentSummary.vendorName} invoice is being saved in the background.`,
+    });
+    setTimeout(() => {
         resetState();
         setOpen(false);
-      }, 1500)
+    }, 1500)
 
 
-    } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Error Saving Invoice',
-        description: error.message,
-      });
-      setStep('confirm'); // Go back to confirmation step on error
-    }
+    // Perform upload and database write in the background
+    const performSave = async () => {
+        try {
+            // 1. Upload file to Firebase Storage
+            const storagePath = `invoices/${currentUser.uid}/${Date.now()}_${currentFile.name}`;
+            const storageRef = ref(storage, storagePath);
+            await uploadBytes(storageRef, currentFile);
+
+            // 2. Create document in Firestore
+            const invoiceData = {
+                ...currentSummary,
+                userId: currentUser.uid,
+                storagePath: storagePath,
+                status: 'pending',
+                createdAt: serverTimestamp(),
+            };
+            const invoicesCollection = collection(firestore, 'invoices');
+            
+            addDoc(invoicesCollection, invoiceData)
+              .then((docRef) => {
+                // 3. Log activity after successful save
+                logActivity({
+                    firestore,
+                    auth,
+                    action: 'Invoice Uploaded',
+                    details: `Uploaded invoice ${currentSummary.invoiceNumber} for vendor ${currentSummary.vendorName}.`,
+                });
+              })
+              .catch(error => {
+                 errorEmitter.emit(
+                    'permission-error',
+                    new FirestorePermissionError({
+                      path: invoicesCollection.path,
+                      operation: 'create',
+                      requestResourceData: invoiceData,
+                    })
+                  );
+              });
+
+        } catch (error: any) {
+            // This error will be for storage upload.
+            // Firestore errors are caught in the .catch block above.
+            console.error("Error saving invoice in background:", error);
+            // We don't show a toast here to avoid bothering the user
+            // for a background task. The error is logged for debugging.
+        }
+    };
+
+    performSave();
   };
 
   const resetState = () => {
@@ -196,7 +218,7 @@ export function UploadInvoiceDialog() {
                 {step === 'saving' && <Loader2 className="h-12 w-12 animate-spin text-primary" />}
                 {step === 'done' && <CheckCircle className="h-12 w-12 text-green-500" />}
                 <p className="text-muted-foreground">
-                    {step === 'saving' ? 'Saving invoice...' : 'Invoice saved successfully!'}
+                    {step === 'saving' ? 'Saving invoice...' : 'Upload initiated!'}
                 </p>
             </div>
         )}
