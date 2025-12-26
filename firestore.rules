@@ -88,9 +88,8 @@ service cloud.firestore {
       // - Cannot change `role`, `isActive`, or the `id` field.
       allow update: if isOwner(userId) && isUserActive() && isNotUpdatingCriticalFields();
 
-      // DELETE: Deleting user profiles is disallowed from the client.
-      // This should be handled by a secure admin process.
-      allow delete: if false;
+      // DELETE: Admins can delete user documents, but not their own.
+      allow delete: if isAdmin() && isUserActive() && request.auth.uid != userId;
     }
   }
 }
