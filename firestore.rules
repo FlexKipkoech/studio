@@ -101,7 +101,11 @@ service cloud.firestore {
       allow get: if isUserActive() && isOwner(resource.data.userId);
 
       // READ (list): A user can list invoices only if the query is filtered by their own userId.
-      allow list: if isUserActive() && request.query.where.size() == 1 && request.query.where.userId == request.auth.uid || (request.query.where.size() == 2 && request.query.where.userId == request.auth.uid);
+      // This handles both the "all" tab (one where clause) and the status tabs (two where clauses).
+      allow list: if isUserActive() && (
+        (request.query.where.size() == 1 && request.query.where.userId == request.auth.uid) ||
+        (request.query.where.size() == 2 && request.query.where.userId == request.auth.uid && request.query.where.keys().hasAny(['status']))
+      );
       
       // WRITE: Users can only create, update, or delete their own invoices.
       allow create, update, delete: if isUserActive() && request.auth.uid == request.resource.data.userId;
