@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, ChangeEvent } from 'react';
+import { useEffect, useRef, useState, ChangeEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -18,36 +18,118 @@ import { PlusCircle, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateInvoiceSummary, InvoiceSummaryOutput } from '@/ai/flows/generate-invoice-summary';
 import { useAuth, useFirestore, useStorage } from '@/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, uploadBytesResumable, UploadTask } from 'firebase/storage';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { logActivity } from '@/lib/activity-logger';
 
 type UploadStep = 'select' | 'analyzing' | 'confirm' | 'saving' | 'done';
+
+function fileToDataUri(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Failed to read file.'));
+    reader.onabort = () => reject(new Error('File reading was aborted.'));
+    reader.onload = () => resolve(reader.result as string);
+    reader.readAsDataURL(file);
+  });
+}
 
 export function UploadInvoiceDialog() {
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [summary, setSummary] = useState<InvoiceSummaryOutput | null>(null);
   const [step, setStep] = useState<UploadStep>('select');
+  const [storagePath, setStoragePath] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [isUploadComplete, setIsUploadComplete] = useState(false);
+  const uploadTaskRef = useRef<UploadTask | null>(null);
+  const uploadPromiseRef = useRef<Promise<void> | null>(null);
   const { toast } = useToast();
   const auth = useAuth();
   const firestore = useFirestore();
   const storage = useStorage();
 
+  useEffect(() => {
+    // Cleanup on unmount
+    return () => {
+      uploadTaskRef.current?.cancel();
+      uploadTaskRef.current = null;
+      uploadPromiseRef.current = null;
+    };
+  }, []);
+
+  const startBackgroundUpload = (selectedFile: File, path: string) => {
+    if (uploadTaskRef.current || uploadPromiseRef.current) return;
+    setUploadProgress(0);
+    setIsUploadComplete(false);
+
+    const storageRef = ref(storage, path);
+    const task = uploadBytesResumable(storageRef, selectedFile);
+    uploadTaskRef.current = task;
+
+    uploadPromiseRef.current = new Promise((resolve, reject) => {
+      task.on(
+        'state_changed',
+        (snapshot) => {
+          if (snapshot.totalBytes > 0) {
+            const progress = Math.round(
+              (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+            );
+            setUploadProgress(progress);
+          }
+        },
+        (error) => {
+          setUploadProgress(null);
+          setIsUploadComplete(false);
+          uploadTaskRef.current = null;
+          uploadPromiseRef.current = null;
+          reject(error);
+        },
+        () => {
+          setUploadProgress(100);
+          setIsUploadComplete(true);
+          uploadTaskRef.current = null;
+          resolve();
+        }
+      );
+    });
+  };
+
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
     if (selectedFile && selectedFile.type === 'application/pdf') {
+      if (!auth.currentUser) {
+        toast({
+          variant: 'destructive',
+          title: 'Not signed in',
+          description: 'Please sign in before uploading an invoice.',
+        });
+        return;
+      }
+
+      // Guardrail: large PDFs can be slow to base64 + analyze.
+      if (selectedFile.size > 10 * 1024 * 1024) {
+        toast({
+          title: 'Large PDF',
+          description:
+            'This invoice is larger than 10MB. Upload/analysis may take longer.',
+        });
+      }
+
       setFile(selectedFile);
       setStep('analyzing');
       try {
-        const reader = new FileReader();
-        reader.readAsDataURL(selectedFile);
-        reader.onload = async () => {
-          const dataUri = reader.result as string;
-          const result = await generateInvoiceSummary({ invoicePdfDataUri: dataUri });
-          setSummary(result);
-          setStep('confirm');
-        };
+        const currentUser = auth.currentUser;
+        const path = `invoices/${currentUser.uid}/${Date.now()}_${selectedFile.name}`;
+        setStoragePath(path);
+
+        // Start uploading in the background while we run AI analysis.
+        startBackgroundUpload(selectedFile, path);
+
+        const dataUri = await fileToDataUri(selectedFile);
+        const result = await generateInvoiceSummary({ invoicePdfDataUri: dataUri });
+        setSummary(result);
+        setStep('confirm');
       } catch (error) {
         console.error(error);
         toast({
@@ -72,22 +154,45 @@ export function UploadInvoiceDialog() {
     setStep('saving');
 
     const currentUser = auth.currentUser;
+    const finalStoragePath =
+      storagePath || `invoices/${currentUser.uid}/${Date.now()}_${file.name}`;
+
+    // Ensure the PDF is uploaded (often already completed by now).
+    try {
+      if (uploadPromiseRef.current) {
+        await uploadPromiseRef.current;
+      } else {
+        const storageRef = ref(storage, finalStoragePath);
+        await uploadBytes(storageRef, file);
+        setUploadProgress(100);
+        setIsUploadComplete(true);
+      }
+    } catch (error: any) {
+      console.error('Error uploading invoice PDF:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Upload Failed',
+        description:
+          error?.code === 'storage/unauthorized'
+            ? 'You do not have permission to upload files.'
+            : error?.message || 'An unexpected upload error occurred.',
+      });
+      setStep('confirm');
+      return;
+    }
+
     const invoiceData = {
       ...summary,
       userId: currentUser.uid,
-      storagePath: `invoices/${currentUser.uid}/${Date.now()}_${file.name}`,
+      storagePath: finalStoragePath,
       status: 'pending',
       createdAt: serverTimestamp(),
     };
     
     try {
-        // 1. Upload file to Firebase Storage
-        const storageRef = ref(storage, invoiceData.storagePath);
-        await uploadBytes(storageRef, file);
-
-        // 2. Create document in Firestore
+        // Create document in Firestore
         const invoicesCollection = collection(firestore, 'invoices');
-        const docRef = await addDoc(invoicesCollection, invoiceData);
+        await addDoc(invoicesCollection, invoiceData);
 
         // 3. Log activity after successful save
         logActivity({
@@ -141,8 +246,14 @@ export function UploadInvoiceDialog() {
 
 
   const resetState = () => {
+    uploadTaskRef.current?.cancel();
+    uploadTaskRef.current = null;
+    uploadPromiseRef.current = null;
     setFile(null);
     setSummary(null);
+    setStoragePath(null);
+    setUploadProgress(null);
+    setIsUploadComplete(false);
     setStep('select');
   };
 
@@ -186,7 +297,14 @@ export function UploadInvoiceDialog() {
         {step === 'analyzing' && (
             <div className="flex flex-col items-center justify-center gap-4 py-8">
                 <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                <p className="text-muted-foreground">Analyzing your invoice...</p>
+                <div className="space-y-1 text-center">
+                  <p className="text-muted-foreground">Analyzing your invoice...</p>
+                  {uploadProgress !== null && uploadProgress < 100 && (
+                    <p className="text-xs text-muted-foreground">
+                      Uploading PDF… {uploadProgress}%
+                    </p>
+                  )}
+                </div>
             </div>
         )}
 
@@ -232,7 +350,9 @@ export function UploadInvoiceDialog() {
             {step === 'confirm' && (
                 <>
                 <Button variant="outline" onClick={resetState}>Cancel</Button>
-                <Button onClick={handleSaveInvoice}>Save Invoice</Button>
+                <Button onClick={handleSaveInvoice}>
+                  {isUploadComplete ? 'Save Invoice' : 'Save Invoice'}
+                </Button>
                 </>
             )}
              {(step === 'select') && (
