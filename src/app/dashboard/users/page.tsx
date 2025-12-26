@@ -46,6 +46,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { logActivity } from '@/lib/activity-logger';
+import { EditUserDialog } from '@/components/dashboard/edit-user-dialog';
 
 
 type UserDoc = {
@@ -54,6 +55,7 @@ type UserDoc = {
   lastName?: string;
   email: string;
   role: string;
+  isActive: boolean;
   photoURL?: string;
 };
 
@@ -67,9 +69,10 @@ export default function UsersPage() {
     () => (firestore ? collection(firestore, 'users') : null),
     [firestore]
   );
-  const { data: users, isLoading } = useCollection(usersRef);
+  const { data: users, isLoading } = useCollection<UserDoc>(usersRef);
 
   const [userToDelete, setUserToDelete] = useState<UserDoc | null>(null);
+  const [userToEdit, setUserToEdit] = useState<UserDoc | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDeleteUser = async () => {
@@ -129,6 +132,7 @@ export default function UsersPage() {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Role</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead className="hidden md:table-cell">
                     Email
                   </TableHead>
@@ -140,7 +144,7 @@ export default function UsersPage() {
               <TableBody>
                 {isLoading && (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center">
+                    <TableCell colSpan={5} className="text-center">
                       Loading users...
                     </TableCell>
                   </TableRow>
@@ -161,6 +165,14 @@ export default function UsersPage() {
                         {user.role}
                       </Badge>
                     </TableCell>
+                    <TableCell>
+                      <Badge variant={user.isActive ? 'default' : 'destructive'} className={cn(
+                        'text-xs',
+                         user.isActive ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'
+                      )}>
+                        {user.isActive ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="hidden md:table-cell">
                       {user.email}
                     </TableCell>
@@ -178,12 +190,11 @@ export default function UsersPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem>Edit</DropdownMenuItem>
-                          <DropdownMenuItem>Deactivate</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setUserToEdit(user)}>Edit</DropdownMenuItem>
                           <DropdownMenuSeparator />
                            <DropdownMenuItem
                             className="text-destructive"
-                            onClick={() => setUserToDelete(user as UserDoc)}
+                            onClick={() => setUserToDelete(user)}
                             disabled={currentUser?.uid === user.id}
                           >
                             Delete
@@ -215,6 +226,11 @@ export default function UsersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <EditUserDialog 
+        user={userToEdit}
+        open={!!userToEdit}
+        onOpenChange={(open) => !open && setUserToEdit(null)}
+      />
     </>
   );
 }
