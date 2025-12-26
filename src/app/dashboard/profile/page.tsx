@@ -101,7 +101,7 @@ export default function ProfilePage() {
   };
 
   const handleUpload = async () => {
-    if (!selectedFile || !user) return;
+    if (!selectedFile || !user || !userRef) return;
 
     setIsUploading(true);
     try {
@@ -111,10 +111,7 @@ export default function ProfilePage() {
       const downloadURL = await getDownloadURL(snapshot.ref);
 
       await updateProfile(user, { photoURL: downloadURL });
-
-      if (userRef) {
-        await updateDoc(userRef, { photoURL: downloadURL });
-      }
+      await updateDoc(userRef, { photoURL: downloadURL });
 
       toast({
         title: 'Profile Picture Updated',
@@ -170,7 +167,8 @@ export default function ProfilePage() {
     }
   }
 
-  const nameInitial = user?.displayName ? user.displayName.charAt(0) : (user?.email ? user.email.charAt(0) : '');
+  const nameInitial = userProfile?.firstName ? userProfile.firstName.charAt(0) : (user?.email ? user.email.charAt(0) : '');
+  const userAvatar = previewUrl || userProfile?.photoURL || user?.photoURL || '';
 
   return (
     <main className="grid flex-1 items-start gap-4 p-4 sm:px-6 sm:py-0 md:gap-8">
@@ -185,7 +183,7 @@ export default function ProfilePage() {
           <CardContent className="space-y-8">
             <div className="flex items-center gap-4">
               <Avatar className="h-20 w-20">
-                <AvatarImage src={previewUrl || user?.photoURL || ''} alt="User avatar" />
+                <AvatarImage src={userAvatar} alt="User avatar" />
                 <AvatarFallback>{nameInitial}</AvatarFallback>
               </Avatar>
               <div className="grid gap-2">
