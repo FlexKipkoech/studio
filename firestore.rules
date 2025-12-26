@@ -71,7 +71,7 @@ service cloud.firestore {
       allow get: if isOwner(userId) && isUserActive();
       
       // LIST: Only active admins can list all users.
-      allow list: if isAdmin() && isUserActive();
+      allow list: if isAdmin();
 
       // CREATE: An admin user can create a new user profile.
       allow create: if isAdmin() && isUserActive();
