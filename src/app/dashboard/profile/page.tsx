@@ -26,12 +26,13 @@ import { useFirestore, useUser, useDoc, useMemoFirebase } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useEffect } from 'react';
 import { Separator } from '@/components/ui/separator';
-import { updatePassword, updateProfile } from 'firebase/auth';
+import { updateEmail, updatePassword, updateProfile } from 'firebase/auth';
 
 const profileFormSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
   username: z.string().min(1, 'Username is required'),
+  email: z.string().email('Invalid email address'),
 });
 
 const passwordFormSchema = z
@@ -61,6 +62,7 @@ export default function ProfilePage() {
       firstName: '',
       lastName: '',
       username: '',
+      email: '',
     },
   });
 
@@ -73,20 +75,28 @@ export default function ProfilePage() {
   });
 
   useEffect(() => {
-    if (userProfile) {
+    if (userProfile && user) {
       profileForm.reset({
         firstName: userProfile.firstName || '',
         lastName: userProfile.lastName || '',
         username: userProfile.username || '',
+        email: user.email || '',
       });
     }
-  }, [userProfile, profileForm]);
+  }, [userProfile, user, profileForm]);
 
   async function onProfileSubmit(values: z.infer<typeof profileFormSchema>) {
     if (!userRef || !user) return;
     try {
-      await updateDoc(userRef, values);
+      if (values.email !== user.email) {
+        await updateEmail(user, values.email);
+      }
+      
+      const { email, ...profileData } = values;
+      
+      await updateDoc(userRef, { ...profileData, email: values.email });
       await updateProfile(user, { displayName: `${values.firstName} ${values.lastName}` });
+      
       toast({
         title: 'Profile Updated',
         description: 'Your profile has been successfully updated.',
@@ -162,6 +172,22 @@ export default function ProfilePage() {
                     )}
                   />
                 </div>
+                 <FormField
+                    control={profileForm.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input type="email" placeholder="flex@example.com" {...field} />
+                        </FormControl>
+                         <FormDescription>
+                          This is your login email.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 <FormField
                   control={profileForm.control}
                   name="username"

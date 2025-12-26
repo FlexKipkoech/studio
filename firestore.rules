@@ -50,15 +50,42 @@ service cloud.firestore {
 
     // On update, prevents a user from changing critical, admin-controlled fields.
     function isNotUpdatingCriticalFields() {
-      // Allow firstName, lastName, and username to be updated.
-      let allowedFields = ['firstName', 'lastName', 'username', 'id', 'email', 'role', 'isActive'];
+      let allowedFields = ['firstName', 'lastName', 'username', 'email', 'id', 'role', 'isActive'];
       let incomingKeys = request.resource.data.keys();
       
-      // Ensure no unexpected fields are being added
       let allKeysAllowed = incomingKeys.hasAll(resource.data.keys()) && resource.data.keys().hasAll(incomingKeys);
 
       return allKeysAllowed
           && request.resource.data.id == resource.data.id
-          && request.resource.data.email == resource.data.email
           && request.resource.data.role == resource.data.role
-          ...
+          && request.resource.data.isActive == resource.data.isActive;
+    }
+
+    match /users/{userId} {
+      // READ: A user can only read their own profile, and only if they are active.
+      allow get: if isOwner(userId) && isUserActive();
+      
+      // LIST: Disallowed for privacy. No one can list all users.
+      allow list: if false;
+
+      // CREATE: A user can create their own profile document.
+      // - Must be signed in.
+      // - The new document's ID must match their auth UID.
+      // - The internal `id` field must also match their auth UID.
+      // - On creation, a user cannot set their own role or isActive status.
+      allow create: if isOwner(userId) 
+                      && hasValidUserId(userId)
+                      && request.resource.data.role == 'Finance Team'
+                      && request.resource.data.isActive == true;
+
+      // UPDATE: A user can update their own profile, but not critical fields.
+      // - Must be the owner and an active user.
+      // - Cannot change `role`, `isActive`, or the `id` field.
+      allow update: if isOwner(userId) && isUserActive() && isNotUpdatingCriticalFields();
+
+      // DELETE: Deleting user profiles is disallowed from the client.
+      // This should be handled by a secure admin process.
+      allow delete: if false;
+    }
+  }
+}
