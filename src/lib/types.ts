@@ -3,7 +3,6 @@ export type User = {
   name: string;
   email: string;
   role: 'Admin' | 'Finance Team';
-  avatarUrl: string;
 };
 
 export type Invoice = {

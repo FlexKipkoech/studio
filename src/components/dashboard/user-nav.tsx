@@ -40,14 +40,13 @@ export function UserNav() {
 
   const displayName = userProfile?.firstName ? `${userProfile.firstName} ${userProfile.lastName}` : user.displayName || user.email;
   const nameInitial = userProfile?.firstName ? userProfile.firstName.charAt(0) : (user.displayName ? user.displayName.charAt(0) : (user.email ? user.email.charAt(0).toUpperCase() : ''));
-  const userAvatar = userProfile?.photoURL || user.photoURL;
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-9 w-9 rounded-full">
           <Avatar className="h-9 w-9">
-            <AvatarImage src={userAvatar || ''} alt={displayName || ''} />
+            <AvatarImage src="" alt={displayName || ''} />
             <AvatarFallback>{nameInitial}</AvatarFallback>
           </Avatar>
         </Button>
