@@ -30,9 +30,48 @@ export function UploadInvoiceDialog() {
   const firestore = useFirestore();
   const storage = useStorage();
 
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
     if (selectedFile && selectedFile.type === 'application/pdf') {
+      if (!auth.currentUser) {
+        toast({
+          variant: 'destructive',
+          title: 'Not signed in',
+          description: 'Please sign in before uploading an invoice.',
+        });
+        return;
+      }
+
+      // Check if user is active
+      try {
+        const userDoc = await firestore.collection('users').doc(auth.currentUser.uid).get();
+        if (!userDoc.exists || !userDoc.data()?.isActive) {
+          toast({
+            variant: 'destructive',
+            title: 'Account Inactive',
+            description: 'Your account is not active. Please contact an admin.',
+          });
+          return;
+        }
+      } catch (error) {
+        console.error('Error checking user status:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: 'Could not verify account status.',
+        });
+        return;
+      }
+
+      // Guardrail: large PDFs can be slow to upload.
+      if (selectedFile.size > 10 * 1024 * 1024) {
+        toast({
+          title: 'Large PDF',
+          description:
+            'This invoice is larger than 10MB. Upload may take longer.',
+        });
+      }
+
       setFile(selectedFile);
     } else {
       toast({

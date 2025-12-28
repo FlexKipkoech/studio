@@ -12,9 +12,14 @@ import { getStorage } from 'firebase-admin/storage';
  */
 export function getAdminApp() {
   if (!getApps().length) {
-    initializeApp({
-      credential: applicationDefault(),
-    });
+    try {
+      initializeApp({
+        credential: applicationDefault(),
+      });
+    } catch (error) {
+      console.error('Failed to initialize Firebase Admin:', error);
+      throw new Error('Firebase Admin initialization failed. Ensure GOOGLE_APPLICATION_CREDENTIALS is set for local development.');
+    }
   }
 
   return getApps()[0]!;
