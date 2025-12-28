@@ -3,6 +3,7 @@ import 'server-only';
 import { getApps, initializeApp, applicationDefault } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
+import { firebaseConfig } from '@/firebase/config';
 
 /**
  * Initializes firebase-admin using Application Default Credentials.
@@ -15,6 +16,7 @@ export function getAdminApp() {
     try {
       initializeApp({
         credential: applicationDefault(),
+        storageBucket: firebaseConfig.storageBucket,
       });
     } catch (error) {
       console.error('Failed to initialize Firebase Admin:', error);
