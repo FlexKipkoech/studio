@@ -18,7 +18,7 @@ import { PlusCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth, useFirestore, useStorage } from '@/firebase';
 import { ref, uploadBytes } from 'firebase/storage';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { logActivity } from '@/lib/activity-logger';
 
 export function UploadInvoiceDialog() {
@@ -42,10 +42,10 @@ export function UploadInvoiceDialog() {
         return;
       }
 
-      // Check if user is active
+      // Check if user is active (required by Firestore security rules)
       try {
-        const userDoc = await firestore.collection('users').doc(auth.currentUser.uid).get();
-        if (!userDoc.exists || !userDoc.data()?.isActive) {
+        const userDocSnap = await getDoc(doc(firestore, 'users', auth.currentUser.uid));
+        if (!userDocSnap.exists() || !userDocSnap.data()?.isActive) {
           toast({
             variant: 'destructive',
             title: 'Account Inactive',
