@@ -1,3 +1,4 @@
+
 /**
  * Core Philosophy: This ruleset enforces a strict user-ownership model and ensures
  * only active users can interact with data. A user's profile information is
@@ -97,13 +98,15 @@ service cloud.firestore {
     }
 
     match /invoices/{invoiceId} {
-      // READ (get, list): Any active user can read any invoice or list all invoices.
+      // READ (get, list): Any active user can see all invoices.
       allow get, list: if isUserActive();
-
-      // CREATE/UPDATE: A user can create/update an invoice only if they are active
-      // and the document's userId matches their own UID.
-      allow create, update: if isUserActive() && request.auth.uid == request.resource.data.userId;
-
+      
+      // CREATE: Any active user can create an invoice. The userId in the document must match their own.
+      allow create: if isUserActive() && request.auth.uid == request.resource.data.userId;
+      
+      // UPDATE: An active user can update an invoice if they are the owner.
+      allow update: if isUserActive() && request.auth.uid == request.resource.data.userId;
+      
       // DELETE: Only active Admins can delete an invoice.
       allow delete: if isAdmin() && isUserActive();
     }

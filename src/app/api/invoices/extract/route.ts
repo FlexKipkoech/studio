@@ -32,13 +32,10 @@ export async function POST(request: Request) {
   const invoiceRef = firestore.collection('invoices').doc(invoiceId);
 
   try {
-    await invoiceRef.set(
-      {
-        extractionStatus: 'processing',
-        extractionUpdatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
+    await invoiceRef.update({
+      extractionStatus: 'processing',
+      extractionUpdatedAt: new Date().toISOString(),
+    });
 
     const bucket = storage.bucket();
     const file = bucket.file(storagePath);
@@ -48,27 +45,21 @@ export async function POST(request: Request) {
 
     const extracted = await generateInvoiceSummary({ invoicePdfDataUri: dataUri });
 
-    await invoiceRef.set(
-      {
-        ...extracted,
-        extractionStatus: 'done',
-        extractionUpdatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
+    await invoiceRef.update({
+      ...extracted,
+      extractionStatus: 'done',
+      extractionUpdatedAt: new Date().toISOString(),
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error: any) {
     // Best-effort: mark extraction error on the invoice doc.
     try {
-      await invoiceRef.set(
-        {
-          extractionStatus: 'error',
-          extractionError: String(error?.message || error),
-          extractionUpdatedAt: new Date().toISOString(),
-        },
-        { merge: true }
-      );
+      await invoiceRef.update({
+        extractionStatus: 'error',
+        extractionError: String(error?.message || error),
+        extractionUpdatedAt: new Date().toISOString(),
+      });
     } catch {
       // ignore
     }
